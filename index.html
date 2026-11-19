@@ -1,0 +1,3132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulador DES · Planificación de Procesos y Concurrencia E/S (UNMSM)</title>
+  <!-- Tipografías académicas y monoespaciadas para telemetría -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            fcfs: '#2563EB',
+            rr: '#D97706',
+            mlfq: '#059669',
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background-color: #F8FAFC;
+      color: #0F172A;
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    /* Estilización limpia de sliders */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: #E2E8F0;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #0F172A;
+      cursor: pointer;
+      border: 2px solid #FFFFFF;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+      transition: transform 0.12s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.15);
+    }
+    /* Transiciones suaves en tarjetas y diagramas */
+    .flow-node {
+      transition: all 0.2s ease;
+    }
+    .flow-node-active {
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+      border-color: #2563EB !important;
+    }
+    /* Scrollbar sutil */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F1F5F9;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-slate-900 selection:text-white">
+
+  <!-- ==================== ENCABEZADO ACADÉMICO ==================== -->
+  <header class="bg-white border-b border-slate-200">
+    <div class="max-w-[1440px] mx-auto px-4 sm:px-6 py-3.5 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+      <div class="flex items-center gap-3">
+        <!-- Emblema SVG minimalista de Kernel / CPU -->
+        <div class="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-sm">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+            <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200">
+              UNMSM · FISI · Ciencia de la Computación
+            </span>
+            <span class="text-xs text-slate-500 hidden sm:inline">Sistemas Operativos · Simulación de Eventos Discretos (DES)</span>
+          </div>
+          <h1 class="text-base sm:text-lg font-bold text-slate-900 tracking-tight mt-0.5">
+            Planificación de Procesos y Concurrencia E/S en el Kernel (FCFS · Round Robin · MLFQ)
+          </h1>
+        </div>
+      </div>
+
+      <!-- Leyenda rápida de políticas -->
+      <div class="flex flex-wrap items-center gap-3 text-xs font-medium text-slate-600">
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50/70 text-blue-700 border border-blue-200/80">
+          <span class="w-2 h-2 rounded-full bg-blue-600"></span> FCFS
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50/70 text-amber-700 border border-amber-200/80">
+          <span class="w-2 h-2 rounded-full bg-amber-600"></span> Round Robin (q=4ms)
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50/70 text-emerald-700 border border-emerald-200/80">
+          <span class="w-2 h-2 rounded-full bg-emerald-600"></span> MLFQ (Q0=2, Q1=6, Q2=FCFS)
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== BARRA SUPERIOR DE PARÁMETROS ==================== -->
+  <section class="max-w-[1440px] w-full mx-auto px-4 sm:px-6 pt-4">
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 items-end">
+
+        <!-- 1. Tasa de llegadas lambda -->
+        <div class="lg:col-span-3">
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="param-lambda" class="text-xs font-semibold text-slate-700">
+              Tasa de llegadas (λ)
+            </label>
+            <span id="label-lambda" class="font-mono text-xs font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md tabular-nums">
+              95 /s
+            </span>
+          </div>
+          <input id="param-lambda" type="range" min="20" max="130" step="1" value="95" class="w-full" />
+          <div class="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+            <span>20 /s</span>
+            <span id="label-interarrival">Media: 10,5 ms</span>
+            <span>130 /s</span>
+          </div>
+        </div>
+
+        <!-- 2. Selector Núcleos CPU -->
+        <div class="lg:col-span-2">
+          <label for="param-cores" class="block text-xs font-semibold text-slate-700 mb-1.5">
+            Núcleos CPU (SMP)
+          </label>
+          <select id="param-cores" class="w-full h-9 px-2.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-slate-400">
+            <option value="1">1 Core (Monoprocesador)</option>
+            <option value="2" selected>2 Cores (Simétrico)</option>
+            <option value="4">4 Cores (Multinúcleo)</option>
+          </select>
+        </div>
+
+        <!-- 3. Selector Canales E/S NVMe/DMA -->
+        <div class="lg:col-span-2">
+          <label for="param-io" class="block text-xs font-semibold text-slate-700 mb-1.5">
+            Canales E/S NVMe/DMA
+          </label>
+          <select id="param-io" class="w-full h-9 px-2.5 text-xs font-medium bg-slate-50 border border-slate-200 rounded-lg text-slate-800 focus:outline-none focus:border-slate-400">
+            <option value="2" selected>2 Canales (Nominal)</option>
+            <option value="1">1 Canal - Cuello de botella</option>
+          </select>
+        </div>
+
+        <!-- 4. Proporción I/O-Bound -->
+        <div class="lg:col-span-2">
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="param-ioratio" class="text-xs font-semibold text-slate-700">
+              Proporción I/O-Bound
+            </label>
+            <span id="label-ioratio" class="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-md tabular-nums">
+              70% / 30%
+            </span>
+          </div>
+          <input id="param-ioratio" type="range" min="20" max="90" step="5" value="70" class="w-full" />
+          <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+            <span>20% I/O</span>
+            <span>I/O · CPU</span>
+            <span>90% I/O</span>
+          </div>
+        </div>
+
+        <!-- 5. Semilla + Escenarios Rápidos + Botón Simular -->
+        <div class="sm:col-span-2 lg:col-span-3 flex flex-wrap items-end gap-2">
+          <div class="w-20 shrink-0">
+            <label for="param-seed" class="block text-xs font-semibold text-slate-700 mb-1.5">
+              Semilla
+            </label>
+            <input id="param-seed" type="number" value="42" min="1" max="999999"
+              class="w-full h-9 px-2.5 font-mono text-xs font-semibold bg-slate-50 border border-slate-200 rounded-lg text-slate-900 focus:outline-none focus:border-slate-400 tabular-nums" />
+          </div>
+
+          <div class="flex-1 min-w-[210px]">
+            <div class="text-[11px] font-semibold text-slate-500 mb-1.5">Escenarios rápidos</div>
+            <div class="flex items-center gap-1">
+              <button type="button" data-preset="baja" class="preset-btn px-2 h-9 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition">
+                Baja
+              </button>
+              <button type="button" data-preset="media" class="preset-btn px-2 h-9 text-xs font-medium rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition">
+                Media
+              </button>
+              <button type="button" data-preset="alta" class="preset-btn px-2 h-9 text-xs font-medium rounded-lg border border-slate-300 bg-slate-100 text-slate-900 font-semibold transition">
+                Alta
+              </button>
+              <button type="button" data-preset="sobrecarga" class="preset-btn px-2 h-9 text-xs font-medium rounded-lg border border-rose-200 bg-rose-50/70 hover:bg-rose-100/70 text-rose-700 transition">
+                Sobrecarga
+              </button>
+              <button type="button" id="btn-simulate" class="ml-auto px-3.5 h-9 text-xs font-semibold rounded-lg bg-slate-900 hover:bg-slate-800 active:scale-[0.99] text-white shadow-sm transition cursor-pointer">
+                Simular
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== NAVEGACIÓN POR 4 PESTAÑAS ==================== -->
+  <nav class="max-w-[1440px] w-full mx-auto px-4 sm:px-6 mt-4">
+    <div class="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
+      <button type="button" data-tab="live" class="tab-btn active px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-slate-900 text-slate-900 whitespace-nowrap transition">
+        1 · En vivo
+      </button>
+      <button type="button" data-tab="results" class="tab-btn px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap transition">
+        2 · Resultados
+      </button>
+      <button type="button" data-tab="step" class="tab-btn px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap transition">
+        3 · Paso a paso (eventos)
+      </button>
+      <button type="button" data-tab="validation" class="tab-btn px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap transition">
+        4 · Validación
+      </button>
+    </div>
+  </nav>
+
+  <!-- ==================== CONTENIDO PRINCIPAL ==================== -->
+  <main class="max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-4 flex-1">
+
+    <!-- ===================================================================== -->
+    <!-- PESTAÑA 1: EN VIVO                                                    -->
+    <!-- ===================================================================== -->
+    <div id="tab-live" class="tab-panel space-y-4">
+
+      <!-- Barra de controles de reproducción en vivo -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <!-- Selector de política activa -->
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500 mr-1">Política en vista:</span>
+          <div class="inline-flex rounded-lg bg-slate-100 p-1 border border-slate-200/80" id="live-policy-selector">
+            <button type="button" data-policy="FCFS" class="policy-pill px-3 py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+              FCFS
+            </button>
+            <button type="button" data-policy="RR" class="policy-pill px-3 py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition">
+              Round Robin
+            </button>
+            <button type="button" data-policy="MLFQ" class="policy-pill active px-3 py-1.5 text-xs font-semibold rounded-md bg-white text-emerald-700 shadow-sm transition">
+              MLFQ
+            </button>
+          </div>
+        </div>
+
+        <!-- Botones de reproducción + Reloj + Velocidad -->
+        <div class="flex flex-wrap items-center gap-2.5">
+          <button type="button" id="btn-play-pause" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition">
+            <span id="play-icon">▶</span>
+            <span id="play-label">Reproducir</span>
+          </button>
+          <button type="button" id="btn-step-live" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-xs font-semibold transition">
+            Siguiente evento ⏭
+          </button>
+          <button type="button" id="btn-reset-live" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 text-xs font-medium transition" title="Reiniciar reloj a t = 0">
+            ↺ Reiniciar
+          </button>
+
+          <div class="h-5 w-px bg-slate-200 mx-0.5 hidden sm:block"></div>
+
+          <!-- Reloj virtual -->
+          <div class="px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 font-mono text-xs sm:text-sm font-bold text-slate-900 tabular-nums">
+            t = <span id="live-clock">0,0</span> ms
+          </div>
+
+          <!-- Selector de velocidad -->
+          <select id="live-speed" class="h-8 px-2 text-xs font-mono font-semibold bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none">
+            <option value="0.05">×0.05</option>
+            <option value="0.2" selected>×0.2</option>
+            <option value="1">×1</option>
+            <option value="5">×5</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Diagrama animado: Flujo del proceso -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">Flujo del proceso en el Kernel (Ciclo CPU / E/S)</h2>
+            <p class="text-xs text-slate-500">
+              Las etiquetas indican el perfil: <span class="text-blue-700 font-semibold">Azul = I/O-Bound</span> (interactivo) y <span class="text-amber-700 font-semibold">Ámbar = CPU-Bound</span> (cálculo intensivo).
+            </p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 font-mono text-xs">
+            <span class="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-800 font-semibold tabular-nums" id="live-littles-counter">
+              En el sistema: L(t) = Q + en servicio = 0 + 0 = 0
+            </span>
+          </div>
+        </div>
+
+        <!-- Arquitectura visual de 6 etapas + rama E/S -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch">
+
+          <!-- Bloque 1: Generador Poisson -->
+          <div class="lg:col-span-2 flex flex-col">
+            <div id="node-source" class="flow-node flex-1 rounded-xl border-2 border-blue-200 bg-blue-50/40 p-3 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-blue-900">1. Generador Poisson</span>
+                <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+              </div>
+              <div class="my-2 space-y-1 text-xs">
+                <div class="flex justify-between text-slate-600">
+                  <span>Llegados:</span>
+                  <span id="flow-arrived" class="font-mono font-bold text-slate-900 tabular-nums">0</span>
+                </div>
+                <div class="flex justify-between text-slate-600">
+                  <span>Próx. en:</span>
+                  <span id="flow-next-arrival" class="font-mono font-semibold text-blue-700 tabular-nums">— ms</span>
+                </div>
+              </div>
+              <div class="text-[10px] font-mono text-slate-500 border-t border-blue-200/70 pt-1.5">
+                Llegadas ~ Exp(λ)
+              </div>
+            </div>
+          </div>
+
+          <!-- Bloque 2: Colas de Listos Q(t) -->
+          <div class="lg:col-span-3 flex flex-col">
+            <div id="node-ready" class="flow-node flex-1 rounded-xl border-2 border-slate-300 bg-slate-50/70 p-3 flex flex-col justify-between">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-bold text-slate-900">2. Colas de Listos Q(t) = <span id="flow-q-count" class="font-mono">0</span></span>
+                <span id="flow-q-policy-badge" class="text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">MLFQ</span>
+              </div>
+              <!-- Contenedor dinámico de PIDs en cola -->
+              <div id="flow-ready-pids" class="min-h-[68px] max-h-[84px] overflow-y-auto flex flex-wrap content-start gap-1 p-1.5 rounded-lg bg-white border border-slate-200/80">
+                <span class="text-[11px] text-slate-400 italic m-auto">Cola vacía</span>
+              </div>
+              <div class="text-[10px] font-mono text-slate-500 border-t border-slate-200 pt-1.5 mt-2 flex justify-between">
+                <span>Siguiente: <strong id="flow-next-pid" class="text-slate-800">—</strong></span>
+                <span id="flow-queue-formula">Q0(2ms) › Q1(6ms) › Q2</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bloque 3: Planificador -->
+          <div class="lg:col-span-2 flex flex-col">
+            <div id="node-scheduler" class="flow-node flex-1 rounded-xl border-2 border-indigo-200 bg-indigo-50/40 p-3 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold text-indigo-950">3. Planificador</span>
+                <span class="text-[10px] font-mono font-bold text-indigo-700">DISPATCH</span>
+              </div>
+              <div class="my-2 text-center">
+                <div id="flow-sched-name" class="text-xs font-bold text-indigo-900">MLFQ 3 Niveles</div>
+                <div id="flow-sched-rule" class="text-[11px] text-slate-600 mt-0.5">Degrada quantum / Promueve E/S</div>
+              </div>
+              <div class="text-[10px] font-mono text-slate-500 border-t border-indigo-200/70 pt-1.5">
+                CS Overhead = 0.15 ms
+              </div>
+            </div>
+          </div>
+
+          <!-- Bloque 4: Núcleos CPU -->
+          <div class="lg:col-span-3 flex flex-col">
+            <div id="node-cpu" class="flow-node flex-1 rounded-xl border-2 border-emerald-300 bg-emerald-50/40 p-3 flex flex-col justify-between">
+              <div class="flex items-center justify-between mb-1.5">
+                <span class="text-xs font-bold text-emerald-950">4. Núcleos CPU (<span id="flow-cores-busy">0/2</span>)</span>
+                <span class="text-[10px] font-mono font-semibold text-emerald-700" id="flow-cpu-util">Util: 0%</span>
+              </div>
+              <!-- Slots de núcleos activos -->
+              <div id="flow-cpu-slots" class="space-y-1.5 my-auto">
+                <!-- Se llena por JS -->
+              </div>
+              <div class="text-[10px] font-mono text-slate-500 border-t border-emerald-200/80 pt-1.5 mt-2">
+                I/O~Exp(1.6ms) · CPU~N(16,3ms)
+              </div>
+            </div>
+          </div>
+
+          <!-- Bloque 5 y 6: XOR Estado -> Controlador E/S NVMe/DMA & Salida -->
+          <div class="lg:col-span-2 flex flex-col gap-2">
+            <!-- Controlador E/S NVMe/DMA -->
+            <div id="node-io" class="flow-node flex-1 rounded-xl border-2 border-amber-300 bg-amber-50/50 p-2.5 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold text-amber-950">5. E/S NVMe/DMA</span>
+                <span id="flow-io-count" class="font-mono text-[10px] font-bold text-amber-800">Q:0 | 0/2</span>
+              </div>
+              <div id="flow-io-active" class="text-[11px] font-mono text-slate-700 my-1 truncate">
+                Canales libres
+              </div>
+              <div class="text-[10px] font-mono text-slate-500 border-t border-amber-200/80 pt-1">
+                E/S ~ Normal(3.2, 0.7 ms)
+              </div>
+            </div>
+
+            <!-- Salida / Terminated -->
+            <div id="node-exit" class="flow-node rounded-xl border-2 border-slate-300 bg-slate-100/70 p-2.5 flex flex-col justify-between">
+              <div class="flex items-center justify-between">
+                <span class="text-[11px] font-bold text-slate-900">6. Salida (Terminated)</span>
+                <span id="flow-completed" class="font-mono text-xs font-bold text-emerald-700 tabular-nums">0</span>
+              </div>
+              <div class="flex justify-between text-[10px] font-mono text-slate-600 mt-1">
+                <span>Resp: <strong id="flow-avg-resp">0,0 ms</strong></span>
+                <span>CT: <strong id="flow-avg-ct">0,0 ms</strong></span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Pie explicativo del último evento -->
+        <div class="mt-3 pt-2.5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+          <div id="live-last-event-banner" class="text-slate-700 font-medium">
+            Listo para iniciar. Presiona <strong class="text-slate-900">Reproducir</strong> o <strong class="text-slate-900">Siguiente evento</strong>.
+          </div>
+          <div class="text-[11px] text-slate-400 font-mono">
+            Compuerta XOR: Fin Quantum (Preempción) | Solicitud E/S (Bloqueo) | Fin PCB
+          </div>
+        </div>
+      </div>
+
+      <!-- Fila inferior: Izquierda (Hardware y Colas MLFQ) | Derecha (Comparativa Paralela) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Panel Inferior Izquierdo: Núcleos CPU, Niveles MLFQ y Canales NVMe/DMA -->
+        <div class="lg:col-span-5 bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="text-sm font-bold text-slate-900">Recursos del Kernel y Colas Multinivel</h3>
+              <span id="hw-panel-policy" class="text-xs font-mono font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                MLFQ Activo
+              </span>
+            </div>
+
+            <!-- Núcleos CPU detallados -->
+            <div class="mb-3.5">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                Núcleos de Procesamiento (CPU)
+              </div>
+              <div id="hw-cores-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <!-- Renderizado dinámico -->
+              </div>
+            </div>
+
+            <!-- Niveles de Cola MLFQ / Ready Queue -->
+            <div class="mb-3.5">
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                Estructura de Colas de Listos
+              </div>
+              <div id="hw-queues-container" class="space-y-2">
+                <!-- Renderizado dinámico Q0, Q1, Q2 -->
+              </div>
+            </div>
+
+            <!-- Controlador E/S NVMe / DMA -->
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+                Controlador de Almacenamiento NVMe / DMA
+              </div>
+              <div id="hw-io-container" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <!-- Renderizado dinámico Canales DMA -->
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-3 pt-2.5 border-t border-slate-100 text-[11px] text-slate-500">
+            En <strong>MLFQ</strong>, los procesos que ceden CPU por E/S permanecen en <strong>Q0 (q=2ms)</strong>; los intensivos descienden a <strong>Q1 (q=6ms)</strong> y <strong>Q2 (FCFS)</strong>.
+          </div>
+        </div>
+
+        <!-- Panel Inferior Derecho: Gráfico comparativo en paralelo (mismo tramo, mismos pedidos) -->
+        <div class="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900">Evolución de cola y latencia (mismo tramo, mismos pedidos)</h3>
+              <p class="text-xs text-slate-500">
+                Ejecución simultánea con Números Aleatorios Comunes (CRN): longitud de cola de listos <span class="font-mono">Q(t)</span> y respuesta media acumulada.
+              </p>
+            </div>
+            <div class="flex items-center gap-3 text-xs font-semibold shrink-0">
+              <span class="inline-flex items-center gap-1 text-blue-700"><span class="w-2.5 h-2.5 rounded-sm bg-blue-600"></span> FCFS</span>
+              <span class="inline-flex items-center gap-1 text-amber-700"><span class="w-2.5 h-2.5 rounded-sm bg-amber-600"></span> RR</span>
+              <span class="inline-flex items-center gap-1 text-emerald-700"><span class="w-2.5 h-2.5 rounded-sm bg-emerald-600"></span> MLFQ</span>
+            </div>
+          </div>
+
+          <!-- Dos sub-gráficos sincronizados en Canvas -->
+          <div class="grid grid-cols-1 gap-3 flex-1">
+            <div class="relative h-[165px] w-full">
+              <canvas id="canvas-live-queue" class="w-full h-full block rounded-lg border border-slate-100 bg-slate-50/40"></canvas>
+            </div>
+            <div class="relative h-[165px] w-full">
+              <canvas id="canvas-live-resp" class="w-full h-full block rounded-lg border border-slate-100 bg-slate-50/40"></canvas>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- PESTAÑA 2: RESULTADOS                                                 -->
+    <!-- ===================================================================== -->
+    <div id="tab-results" class="tab-panel hidden space-y-4">
+
+      <!-- Cabecera de corrida estadística -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div>
+          <h2 class="text-sm font-bold text-slate-900">Resultados Comparativos en Estado Estacionario (1 500 procesos evaluados)</h2>
+          <p class="text-xs text-slate-500" id="results-subtitle">
+            Corrida de 1 800 procesos (descartados 150 de calentamiento y 150 de enfriamiento) · Misma semilla y flujos CRN.
+          </p>
+        </div>
+        <div class="text-xs font-medium text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+          El punto de color (<span class="inline-block w-2 h-2 rounded-full bg-emerald-600 align-middle"></span>) marca la mejor política en cada métrica.
+        </div>
+      </div>
+
+      <!-- 3 Tarjetas Resumen (FCFS, Round Robin, MLFQ) -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="results-cards-container">
+        <!-- Se genera dinámicamente por JS -->
+      </div>
+
+      <!-- 3 Gráficos Inferiores -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+        <!-- Gráfico 1: ¿En qué se va el tiempo? -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col">
+          <div class="mb-2">
+            <h3 class="text-sm font-bold text-slate-900">¿En qué se va el tiempo?</h3>
+            <p class="text-xs text-slate-500">Descomposición del Tiempo de Ciclo medio (CT) por etapa.</p>
+          </div>
+          <div class="relative h-[250px] w-full flex-1">
+            <canvas id="canvas-res-breakdown" class="w-full h-full block"></canvas>
+          </div>
+          <div class="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-2.5 text-[11px] text-slate-600">
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-rose-500"></span> Espera CPU</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-slate-500"></span> Context Switch</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-blue-600"></span> Ejec. CPU</span>
+            <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-xs bg-amber-500"></span> E/S NVMe</span>
+          </div>
+        </div>
+
+        <!-- Gráfico 2: Percentiles de la respuesta -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col">
+          <div class="mb-2">
+            <h3 class="text-sm font-bold text-slate-900">Percentiles de la respuesta</h3>
+            <p class="text-xs text-slate-500">Distribución de cola derecha: p50, p75, p90, p95, p99, p99.9 y máx.</p>
+          </div>
+          <div class="relative h-[250px] w-full flex-1">
+            <canvas id="canvas-res-percentiles" class="w-full h-full block"></canvas>
+          </div>
+          <div class="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <div class="flex items-center gap-3 font-semibold">
+              <span class="text-blue-700">● FCFS</span>
+              <span class="text-amber-700">● RR</span>
+              <span class="text-emerald-700">● MLFQ</span>
+            </div>
+            <span>Menor = mejor interactividad</span>
+          </div>
+        </div>
+
+        <!-- Gráfico 3: Equidad por perfil de proceso -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col">
+          <div class="mb-2">
+            <h3 class="text-sm font-bold text-slate-900">Equidad por perfil de proceso</h3>
+            <p class="text-xs text-slate-500">Tiempo de Ciclo (CT) medio: I/O-Bound vs. CPU-Bound.</p>
+          </div>
+          <div class="relative h-[250px] w-full flex-1">
+            <canvas id="canvas-res-equity" class="w-full h-full block"></canvas>
+          </div>
+          <div class="mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+            MLFQ protege la latencia interactiva (I/O-Bound) a costa de un ligero incremento en CPU-Bound.
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- PESTAÑA 3: PASO A PASO (EVENTOS)                                      -->
+    <!-- ===================================================================== -->
+    <div id="tab-step" class="tab-panel hidden space-y-4">
+
+      <!-- Barra superior de control paso a paso -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500">Política inspeccionada:</span>
+          <div class="inline-flex rounded-lg bg-slate-100 p-1 border border-slate-200/80" id="step-policy-selector">
+            <button type="button" data-policy="FCFS" class="step-policy-pill px-3 py-1 text-xs font-semibold rounded-md text-slate-600 transition">FCFS</button>
+            <button type="button" data-policy="RR" class="step-policy-pill px-3 py-1 text-xs font-semibold rounded-md text-slate-600 transition">Round Robin</button>
+            <button type="button" data-policy="MLFQ" class="step-policy-pill active px-3 py-1 text-xs font-semibold rounded-md bg-white text-emerald-700 shadow-sm transition">MLFQ</button>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" id="btn-step-advance" class="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold shadow-sm transition">
+            Siguiente evento ⏭
+          </button>
+          <button type="button" id="btn-step-10" class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 text-xs font-semibold transition">
+            Avanzar +10 eventos
+          </button>
+          <button type="button" id="btn-step-reset" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 text-xs font-medium transition">
+            ↺ Reiniciar
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid Principal: Izquierda (Diagrama de flujo de eventos) | Derecha (FEL, Variables, Contadores) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Panel Izquierdo: Qué hace el simulador en cada evento -->
+        <div class="lg:col-span-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col justify-between">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900 mb-1">Qué hace el simulador en cada evento</h2>
+            <p class="text-xs text-slate-500 mb-3">
+              El reloj salta al evento más próximo en la FEL. En color se resalta la ruta ejecutada en el último paso.
+            </p>
+
+            <!-- Diagrama SVG interactivo de las 4 rutinas de eventos -->
+            <div class="w-full overflow-x-auto">
+              <svg id="svg-event-logic" viewBox="0 0 640 430" class="w-full h-auto select-none">
+                <defs>
+                  <marker id="arrow-gray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#94A3B8" />
+                  </marker>
+                  <marker id="arrow-active" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <path d="M 0 1 L 10 5 L 0 9 z" fill="#EA580C" />
+                  </marker>
+                </defs>
+
+                <!-- Nodo Raíz: Avanzar reloj -->
+                <rect id="ev-box-root" x="145" y="10" width="350" height="46" rx="10" fill="#FFF7ED" stroke="#EA580C" stroke-width="2" />
+                <text x="320" y="30" text-anchor="middle" font-size="12" font-weight="700" fill="#0F172A">Avanzar el reloj al evento más próximo</text>
+                <text x="320" y="46" text-anchor="middle" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#475569">reloj ← mín(FEL: Llegada, Fin Slice CPU, Fin E/S)</text>
+
+                <!-- Conectores desde raíz hacia las 4 ramas -->
+                <path id="ev-line-arrival" d="M 200 56 L 85 88" stroke="#94A3B8" stroke-width="1.8" fill="none" marker-end="url(#arrow-gray)" />
+                <path id="ev-line-preempt" d="M 275 56 L 240 88" stroke="#94A3B8" stroke-width="1.8" fill="none" marker-end="url(#arrow-gray)" />
+                <path id="ev-line-io" d="M 365 56 L 400 88" stroke="#94A3B8" stroke-width="1.8" fill="none" marker-end="url(#arrow-gray)" />
+                <path id="ev-line-term" d="M 440 56 L 555 88" stroke="#94A3B8" stroke-width="1.8" fill="none" marker-end="url(#arrow-gray)" />
+
+                <!-- RAMA 1: Llegada de proceso -->
+                <g id="ev-group-arrival">
+                  <rect x="12" y="92" width="146" height="54" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" class="ev-card" />
+                  <text x="85" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">1. Llegada proceso</text>
+                  <text x="85" y="127" text-anchor="middle" font-size="9.5" fill="#475569">Crea PCB, inserta en Q0</text>
+                  <text x="85" y="140" text-anchor="middle" font-size="9" font-family="JetBrains Mono, monospace" fill="#64748B">Programa próx. Exp(λ)</text>
+
+                  <line x1="85" y1="146" x2="85" y2="174" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arrow-gray)" class="ev-subline" />
+
+                  <rect x="12" y="178" width="146" height="64" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" class="ev-card" />
+                  <text x="85" y="198" text-anchor="middle" font-size="10.5" font-weight="600" fill="#0F172A">¿Core CPU libre?</text>
+                  <text x="85" y="214" text-anchor="middle" font-size="9.5" fill="#475569">Sí: Inicia CS (0.15 ms)</text>
+                  <text x="85" y="229" text-anchor="middle" font-size="9.5" fill="#475569">No: Espera en cola Q(t)</text>
+                </g>
+
+                <!-- RAMA 2: Fin de quantum / Preempción -->
+                <g id="ev-group-preempt">
+                  <rect x="168" y="92" width="146" height="54" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" class="ev-card" />
+                  <text x="241" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">2. Expira Quantum</text>
+                  <text x="241" y="127" text-anchor="middle" font-size="9.5" fill="#475569">rem_cpu &gt; 0 (Preempción)</text>
+                  <text x="241" y="140" text-anchor="middle" font-size="9" font-family="JetBrains Mono, monospace" fill="#64748B">Libera Core CPU</text>
+
+                  <line x1="241" y1="146" x2="241" y2="174" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arrow-gray)" class="ev-subline" />
+
+                  <rect x="168" y="178" width="146" height="64" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" class="ev-card" />
+                  <text x="241" y="198" text-anchor="middle" font-size="10.5" font-weight="600" fill="#0F172A">Reencolar Listos</text>
+                  <text x="241" y="214" text-anchor="middle" font-size="9.5" fill="#475569">MLFQ: Degrada Q0→Q1→Q2</text>
+                  <text x="241" y="229" text-anchor="middle" font-size="9.5" fill="#475569">Despacha sig. proceso</text>
+                </g>
+
+                <!-- RAMA 3: Solicitud / Fin de E/S -->
+                <g id="ev-group-io">
+                  <rect x="324" y="92" width="146" height="54" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" class="ev-card" />
+                  <text x="397" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">3. Evento E/S NVMe</text>
+                  <text x="397" y="127" text-anchor="middle" font-size="9.5" fill="#475569">Bloqueo o Fin DMA</text>
+                  <text x="397" y="140" text-anchor="middle" font-size="9" font-family="JetBrains Mono, monospace" fill="#64748B">Normal(3.2, 0.7 ms)</text>
+
+                  <line x1="397" y1="146" x2="397" y2="174" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arrow-gray)" class="ev-subline" />
+
+                  <rect x="324" y="178" width="146" height="64" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" class="ev-card" />
+                  <text x="397" y="198" text-anchor="middle" font-size="10.5" font-weight="600" fill="#0F172A">Gestión Canal DMA</text>
+                  <text x="397" y="214" text-anchor="middle" font-size="9.5" fill="#475569">Req: Usa canal o cola E/S</text>
+                  <text x="397" y="229" text-anchor="middle" font-size="9.5" fill="#475569">Fin: Promueve PCB a Q0</text>
+                </g>
+
+                <!-- RAMA 4: Terminación PCB -->
+                <g id="ev-group-term">
+                  <rect x="480" y="92" width="148" height="54" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" class="ev-card" />
+                  <text x="554" y="112" text-anchor="middle" font-size="11" font-weight="700" fill="#0F172A">4. Terminación PCB</text>
+                  <text x="554" y="127" text-anchor="middle" font-size="9.5" fill="#475569">Última ráfaga completada</text>
+                  <text x="554" y="140" text-anchor="middle" font-size="9" font-family="JetBrains Mono, monospace" fill="#64748B">Estado → TERMINATED</text>
+
+                  <line x1="554" y1="146" x2="554" y2="174" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arrow-gray)" class="ev-subline" />
+
+                  <rect x="480" y="178" width="148" height="64" rx="8" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.5" class="ev-card" />
+                  <text x="554" y="198" text-anchor="middle" font-size="10.5" font-weight="600" fill="#0F172A">Registrar Métricas</text>
+                  <text x="554" y="214" text-anchor="middle" font-size="9.5" fill="#475569">CT = reloj − llegada</text>
+                  <text x="554" y="229" text-anchor="middle" font-size="9.5" fill="#475569">Despacha sig. en Core</text>
+                </g>
+
+                <!-- Bucle inferior de retorno al reloj -->
+                <path d="M 85 242 L 85 276 L 554 276 L 554 242" stroke="#CBD5E1" stroke-width="1.5" fill="none" />
+                <line x1="320" y1="276" x2="320" y2="300" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arrow-gray)" />
+                <rect x="165" y="304" width="310" height="34" rx="8" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.2" />
+                <text x="320" y="325" text-anchor="middle" font-size="10.5" font-weight="600" fill="#334155">
+                  Actualizar integrales de área (L(t), ρ_CPU, ρ_IO) y repetir
+                </text>
+
+                <!-- Caja resumen del último evento dentro del SVG -->
+                <rect x="12" y="352" width="616" height="66" rx="10" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="1.5" />
+                <text x="26" y="373" font-size="10.5" font-weight="700" fill="#0F172A">TRAZA DEL ÚLTIMO EVENTO EJECUTADO:</text>
+                <text id="svg-last-event-line1" x="26" y="391" font-size="10.5" font-family="JetBrains Mono, monospace" fill="#EA580C">
+                  t = 0,00 ms · Inicio de simulación (cola vacía, recursos libres)
+                </text>
+                <text id="svg-last-event-line2" x="26" y="408" font-size="10" fill="#475569">
+                  Presiona "Siguiente evento" para avanzar paso a paso por la Lista de Eventos Futuros (FEL).
+                </text>
+              </svg>
+            </div>
+          </div>
+
+          <div id="step-narrative-box" class="mt-2 p-3 rounded-lg bg-amber-50/70 border border-amber-200 text-xs text-slate-800 leading-relaxed">
+            <strong>Estado inicial:</strong> Todos los núcleos CPU y canales NVMe/DMA se encuentran libres. La primera llegada está programada en la Lista de Eventos Futuros (FEL).
+          </div>
+        </div>
+
+        <!-- Panel Derecho: Lista de eventos y estado -->
+        <div class="lg:col-span-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col justify-between space-y-4">
+          <div>
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h2 class="text-sm font-bold text-slate-900">Lista de eventos y estado</h2>
+                <span class="text-xs text-slate-500">Reloj de simulación discreta</span>
+              </div>
+              <div class="text-right">
+                <div id="step-big-clock" class="font-mono text-2xl sm:text-3xl font-bold text-slate-900 tabular-nums">
+                  t = 0,00 ms
+                </div>
+              </div>
+            </div>
+
+            <!-- Lista de Eventos Futuros (FEL) -->
+            <div class="mt-3">
+              <div class="flex items-center justify-between mb-1.5">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Lista de Eventos Futuros (FEL — el reloj salta al primero)
+                </h3>
+                <span id="step-fel-size" class="text-[11px] font-mono text-slate-400">0 eventos</span>
+              </div>
+              <div class="overflow-x-auto rounded-lg border border-slate-200">
+                <table class="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-600">
+                      <th class="py-1.5 px-2.5">Evento</th>
+                      <th class="py-1.5 px-2.5">Proceso / Recurso</th>
+                      <th class="py-1.5 px-2.5 text-right">Ocurre en t =</th>
+                      <th class="py-1.5 px-2.5 text-right">Faltan</th>
+                    </tr>
+                  </thead>
+                  <tbody id="step-fel-tbody" class="divide-y divide-slate-100 font-mono text-[11px] tabular-nums">
+                    <!-- Dinámico -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- Variables de Estado -->
+            <div class="mt-4">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Variables de estado del Kernel
+              </h3>
+              <div class="rounded-lg border border-slate-200 divide-y divide-slate-100 text-xs">
+                <div class="px-3 py-2 flex justify-between items-center gap-2">
+                  <span class="text-slate-600 font-medium">Núcleos CPU</span>
+                  <span id="step-var-cpu" class="font-mono font-semibold text-slate-900 text-right">—</span>
+                </div>
+                <div class="px-3 py-2 flex justify-between items-center gap-2">
+                  <span class="text-slate-600 font-medium">Colas Listos (Q0 / Q1 / Q2)</span>
+                  <span id="step-var-queues" class="font-mono font-semibold text-slate-900 text-right">—</span>
+                </div>
+                <div class="px-3 py-2 flex justify-between items-center gap-2">
+                  <span class="text-slate-600 font-medium">Controlador NVMe/DMA</span>
+                  <span id="step-var-io" class="font-mono font-semibold text-slate-900 text-right">—</span>
+                </div>
+                <div class="px-3 py-2 flex justify-between items-center gap-2">
+                  <span class="text-slate-600 font-medium">Procesos en cola Q(t)</span>
+                  <span id="step-var-qcount" class="font-mono font-bold text-blue-700">0</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Contadores Estadísticos Acumulados -->
+            <div class="mt-4">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1.5">
+                Contadores estadísticos acumulados (desde t = 0)
+              </h3>
+              <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 font-mono text-xs tabular-nums">
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+                  <div class="text-[10px] font-sans text-slate-500">Procesos llegados</div>
+                  <div id="step-cnt-arrived" class="font-bold text-slate-900 mt-0.5">0</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+                  <div class="text-[10px] font-sans text-slate-500">Procesos completados</div>
+                  <div id="step-cnt-completed" class="font-bold text-emerald-700 mt-0.5">0</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+                  <div class="text-[10px] font-sans text-slate-500">Respuesta media</div>
+                  <div id="step-cnt-resp" class="font-bold text-slate-900 mt-0.5">0,00 ms</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+                  <div class="text-[10px] font-sans text-slate-500">Turnaround CT medio</div>
+                  <div id="step-cnt-ct" class="font-bold text-slate-900 mt-0.5">0,00 ms</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+                  <div class="text-[10px] font-sans text-slate-500">Utilización CPU (ρ)</div>
+                  <div id="step-cnt-cpu-util" class="font-bold text-slate-900 mt-0.5">0,0%</div>
+                </div>
+                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80">
+                  <div class="text-[10px] font-sans text-slate-500">Cambios de contexto</div>
+                  <div id="step-cnt-cs" class="font-bold text-slate-900 mt-0.5">0</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- PESTAÑA 4: VALIDACIÓN                                                 -->
+    <!-- ===================================================================== -->
+    <div id="tab-validation" class="tab-panel hidden space-y-4">
+
+      <!-- Fila Superior: Izquierda (Tabla Validación Analítica vs Simulación) | Derecha (Curva de Carga) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+        <!-- Tabla de Validación Analítica y Ley de Little -->
+        <div class="lg:col-span-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <div>
+                <h2 class="text-sm font-bold text-slate-900">Validación Analítica frente a la Simulación</h2>
+                <p class="text-xs text-slate-500">Verificación de la Ley de Little (<span class="font-mono">L = λ · CT</span>) y factores de utilización de recursos.</p>
+              </div>
+              <span class="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Estado Estacionario
+              </span>
+            </div>
+
+            <div class="overflow-x-auto mt-3 rounded-lg border border-slate-200">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-700">
+                    <th class="py-2 px-3">Política / Indicador</th>
+                    <th class="py-2 px-2.5 text-right">Teórico / λ·CT</th>
+                    <th class="py-2 px-2.5 text-right">Simulado</th>
+                    <th class="py-2 px-2.5 text-right">Error / Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="val-table-tbody" class="divide-y divide-slate-100 font-mono text-[11px] tabular-nums">
+                  <!-- Dinámico -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mt-3 p-3 rounded-lg bg-slate-50 border border-slate-200/80 text-xs text-slate-600 space-y-1">
+            <div class="font-semibold text-slate-800">Ecuaciones de verificación utilizadas:</div>
+            <div class="font-mono text-[11px]">• Ley de Little: L_simulado = (1/T) ∫ L(t) dt ≈ λ_ef × CT_medio</div>
+            <div class="font-mono text-[11px]">• Utilización: ρ_CPU = E[S_CPU] · λ / c_CPU  |  ρ_IO = E[S_IO] · λ / c_IO</div>
+          </div>
+        </div>
+
+        <!-- Curva de Carga -->
+        <div class="lg:col-span-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5 flex flex-col">
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div>
+              <h2 class="text-sm font-bold text-slate-900">Curva de carga (Respuesta media vs. Tasa λ)</h2>
+              <p class="text-xs text-slate-500">Barrido paramétrico de 20 a 130 proc/s bajo la configuración actual de cores y canales E/S.</p>
+            </div>
+            <button type="button" id="btn-recalc-curve" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-xs font-semibold text-slate-700 shrink-0 transition">
+              Recalcular
+            </button>
+          </div>
+
+          <div class="relative h-[255px] w-full flex-1">
+            <canvas id="canvas-val-loadcurve" class="w-full h-full block"></canvas>
+          </div>
+
+          <div class="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+            <div class="flex items-center gap-3 font-semibold">
+              <span class="text-blue-700">● FCFS</span>
+              <span class="text-amber-700">● Round Robin</span>
+              <span class="text-emerald-700">● MLFQ</span>
+            </div>
+            <span>Línea punteada = λ actual (<span id="val-current-lambda-label">95 /s</span>)</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Fila Inferior: 4 Histogramas de Variables Aleatorias -->
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
+          <div>
+            <h2 class="text-sm font-bold text-slate-900">Variables aleatorias: generado (barras) frente a teórico (línea o puntos)</h2>
+            <p class="text-xs text-slate-500">
+              Verificación de bondad de ajuste de los generadores estocásticos (<span class="font-mono">mulberry32</span>) para la semilla activa.
+            </p>
+          </div>
+          <span id="val-samples-badge" class="text-xs font-mono text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
+            n = 1 800 procesos
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Histograma 1 -->
+          <div class="flex flex-col">
+            <div class="text-xs font-bold text-slate-800">Tiempo entre llegadas (ms)</div>
+            <div id="hist-sub-1" class="text-[11px] font-mono text-slate-500 mb-1.5">Exponencial(λ = 95/s)</div>
+            <div class="relative h-[160px] w-full">
+              <canvas id="canvas-hist-1" class="w-full h-full block rounded-lg bg-slate-50/50 border border-slate-100"></canvas>
+            </div>
+          </div>
+
+          <!-- Histograma 2 -->
+          <div class="flex flex-col">
+            <div class="text-xs font-bold text-slate-800">Ráfaga CPU I/O-Bound (ms)</div>
+            <div id="hist-sub-2" class="text-[11px] font-mono text-slate-500 mb-1.5">Exponencial(μ = 1,6 ms)</div>
+            <div class="relative h-[160px] w-full">
+              <canvas id="canvas-hist-2" class="w-full h-full block rounded-lg bg-slate-50/50 border border-slate-100"></canvas>
+            </div>
+          </div>
+
+          <!-- Histograma 3 -->
+          <div class="flex flex-col">
+            <div class="text-xs font-bold text-slate-800">Duración E/S NVMe (ms)</div>
+            <div id="hist-sub-3" class="text-[11px] font-mono text-slate-500 mb-1.5">Normal(μ = 3,2 ms; σ = 0,7)</div>
+            <div class="relative h-[160px] w-full">
+              <canvas id="canvas-hist-3" class="w-full h-full block rounded-lg bg-slate-50/50 border border-slate-100"></canvas>
+            </div>
+          </div>
+
+          <!-- Histograma 4 -->
+          <div class="flex flex-col">
+            <div class="text-xs font-bold text-slate-800">Perfil de carga (Bernoulli)</div>
+            <div id="hist-sub-4" class="text-[11px] font-mono text-slate-500 mb-1.5">P(I/O-Bound) = 0,70</div>
+            <div class="relative h-[160px] w-full">
+              <canvas id="canvas-hist-4" class="w-full h-full block rounded-lg bg-slate-50/50 border border-slate-100"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Pie de página discreto -->
+  <footer class="max-w-[1440px] w-full mx-auto px-4 sm:px-6 py-3 border-t border-slate-200/80 text-[11px] text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2">
+    <div>
+      Simulador de Eventos Discretos (DES) · Curso de Sistemas Operativos · E.P. Ciencia de la Computación — UNMSM
+    </div>
+    <div class="font-mono">
+      Motor CRN Determinista (mulberry32) · CS = 0,15 ms · RR(q=4ms) · MLFQ(2ms / 6ms / FCFS)
+    </div>
+  </footer>
+
+  <!-- ==================== LÓGICA DEL SIMULADOR DES Y UI ==================== -->
+  <script>
+    "use strict";
+
+    // =========================================================================
+    // 1. GENERADOR PSEUDOALEATORIO DETERMINISTA (MULBERRY32) Y DISTRIBUCIONES
+    // =========================================================================
+    function createPRNG(seed) {
+      let a = (seed >>> 0) || 42;
+      return function nextRandom() {
+        a |= 0;
+        a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+
+    // Transformada inversa exponencial: -mean * ln(1 - U)
+    function sampleExponential(rng, mean) {
+      const u = Math.max(1e-12, 1.0 - rng());
+      return -mean * Math.log(u);
+    }
+
+    // Método Box-Muller para distribución Normal N(mean, std^2)
+    function sampleNormal(rng, mean, std) {
+      const u1 = Math.max(1e-12, rng());
+      const u2 = rng();
+      const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+      return mean + z0 * std;
+    }
+
+    // Entero uniforme discreto en [min, max]
+    function sampleUniformInt(rng, min, max) {
+      return min + Math.floor(rng() * (max - min + 1));
+    }
+
+    // =========================================================================
+    // 2. GENERADOR DE CARGA DE TRABAJO CON NÚMEROS ALEATORIOS COMUNES (CRN)
+    // =========================================================================
+    // Genera exactamente los mismos N procesos (llegadas, perfil, ráfagas CPU/IO)
+    // para que FCFS, Round Robin y MLFQ compitan en igualdad de condiciones.
+    function generateWorkload(numProcesses, params) {
+      const rngArr = createPRNG(params.seed * 101 + 7);
+      const rngType = createPRNG(params.seed * 211 + 13);
+      const rngCpu = createPRNG(params.seed * 307 + 29);
+      const rngIo = createPRNG(params.seed * 401 + 43);
+
+      const meanInterArrival = 1000.0 / params.lambda; // ms
+      const ioProb = params.ioRatio / 100.0;
+
+      const processes = [];
+      const rawInterArrivals = [];
+      const rawIoCpuBursts = [];
+      const rawIoDurations = [];
+
+      let currentTime = 0.0;
+      for (let i = 1; i <= numProcesses; i++) {
+        const ia = sampleExponential(rngArr, meanInterArrival);
+        currentTime += ia;
+        rawInterArrivals.push(ia);
+
+        const isIoBound = rngType() < ioProb;
+        const type = isIoBound ? "IO" : "CPU";
+        const numBursts = isIoBound
+          ? sampleUniformInt(rngCpu, 4, 7)
+          : sampleUniformInt(rngCpu, 2, 3);
+
+        const cpuBursts = [];
+        const ioBursts = [];
+
+        for (let b = 0; b < numBursts; b++) {
+          if (isIoBound) {
+            const rawB = sampleExponential(rngCpu, 1.6);
+            rawIoCpuBursts.push(rawB);
+            cpuBursts.push(Math.max(0.4, rawB));
+          } else {
+            const rawB = sampleNormal(rngCpu, 16.0, 3.0);
+            cpuBursts.push(Math.max(5.0, rawB));
+          }
+
+          if (b < numBursts - 1) {
+            const rawIo = isIoBound
+              ? sampleNormal(rngIo, 3.2, 0.7)
+              : sampleNormal(rngIo, 2.8, 0.6);
+            if (isIoBound) rawIoDurations.push(rawIo);
+            ioBursts.push(Math.max(0.8, rawIo));
+          }
+        }
+
+        processes.push({
+          pid: i,
+          label: `P${i}`,
+          type,
+          arrivalTime: currentTime,
+          cpuBursts,
+          ioBursts
+        });
+      }
+
+      return {
+        processes,
+        samples: {
+          interArrivals: rawInterArrivals,
+          ioCpuBursts: rawIoCpuBursts,
+          ioDurations: rawIoDurations
+        }
+      };
+    }
+
+    // =========================================================================
+    // 3. MONTÍCULO BINARIO (MIN-HEAP) PARA LISTA DE EVENTOS FUTUROS (FEL)
+    // =========================================================================
+    class MinHeap {
+      constructor() {
+        this.data = [];
+      }
+      get size() {
+        return this.data.length;
+      }
+      peek() {
+        return this.data.length > 0 ? this.data[0] : null;
+      }
+      push(item) {
+        this.data.push(item);
+        this._bubbleUp(this.data.length - 1);
+      }
+      pop() {
+        if (this.data.length === 0) return null;
+        const top = this.data[0];
+        const end = this.data.pop();
+        if (this.data.length > 0) {
+          this.data[0] = end;
+          this._sinkDown(0);
+        }
+        return top;
+      }
+      _bubbleUp(idx) {
+        const item = this.data[idx];
+        while (idx > 0) {
+          const parentIdx = (idx - 1) >> 1;
+          const parent = this.data[parentIdx];
+          if (item.time > parent.time || (item.time === parent.time && item.seq >= parent.seq)) break;
+          this.data[idx] = parent;
+          idx = parentIdx;
+        }
+        this.data[idx] = item;
+      }
+      _sinkDown(idx) {
+        const len = this.data.length;
+        const item = this.data[idx];
+        while (true) {
+          let leftIdx = (idx << 1) + 1;
+          let rightIdx = leftIdx + 1;
+          let swapIdx = -1;
+
+          if (leftIdx < len) {
+            const left = this.data[leftIdx];
+            if (left.time < item.time || (left.time === item.time && left.seq < item.seq)) {
+              swapIdx = leftIdx;
+            }
+          }
+          if (rightIdx < len) {
+            const right = this.data[rightIdx];
+            const cmp = swapIdx === -1 ? item : this.data[swapIdx];
+            if (right.time < cmp.time || (right.time === cmp.time && right.seq < cmp.seq)) {
+              swapIdx = rightIdx;
+            }
+          }
+          if (swapIdx === -1) break;
+          this.data[idx] = this.data[swapIdx];
+          idx = swapIdx;
+        }
+        this.data[idx] = item;
+      }
+      toSortedArray(limit = 8) {
+        return [...this.data]
+          .sort((a, b) => (a.time !== b.time ? a.time - b.time : a.seq - b.seq))
+          .slice(0, limit);
+      }
+    }
+
+    // =========================================================================
+    // 4. MOTOR DE SIMULACIÓN DE EVENTOS DISCRETOS DEL KERNEL (DES)
+    // =========================================================================
+    const CS_OVERHEAD = 0.15; // ms por cambio de contexto
+
+    class KernelDES {
+      constructor(policy, workloadProcesses, config) {
+        this.policy = policy; // "FCFS" | "RR" | "MLFQ"
+        this.template = workloadProcesses;
+        this.numCores = config.numCores;
+        this.numIO = config.numIO;
+        this.reset();
+      }
+
+      reset() {
+        this.now = 0.0;
+        this.lastUpdateTime = 0.0;
+        this.fel = new MinHeap();
+        this.seq = 0;
+
+        // Colas de listos: MLFQ usa 3 niveles (Q0, Q1, Q2); FCFS y RR usan Q0
+        this.readyQueues = [[], [], []];
+        this.ioQueue = [];
+
+        // Estado de núcleos CPU
+        this.cores = Array.from({ length: this.numCores }, (_, idx) => ({
+          id: idx,
+          busy: false,
+          phase: "IDLE", // "IDLE" | "CS" | "RUNNING"
+          proc: null,
+          sliceStart: 0,
+          sliceEnd: 0,
+          busyTime: 0
+        }));
+
+        // Estado de canales NVMe/DMA
+        this.ioChannels = Array.from({ length: this.numIO }, (_, idx) => ({
+          id: idx,
+          busy: false,
+          proc: null,
+          start: 0,
+          end: 0,
+          busyTime: 0
+        }));
+
+        // Estadísticas globales y acumulados
+        this.nextArrivalIdx = 0;
+        this.arrivedCount = 0;
+        this.completedProcs = [];
+        this.activeProcs = new Map();
+        this.contextSwitches = 0;
+
+        // Integrales de área para Ley de Little y colas medias
+        this.areaSystemL = 0.0;
+        this.areaReadyQ = 0.0;
+        this.areaIoQ = 0.0;
+        this.totalCpuBusyTime = 0.0;
+        this.totalIoBusyTime = 0.0;
+
+        // Trazabilidad para pestañas En Vivo y Paso a Paso
+        this.lastEvent = {
+          branch: "INIT",
+          title: "Inicio de simulación",
+          detail: "Cola vacía, núcleos y canales DMA listos.",
+          time: 0.0
+        };
+        this.history = []; // [{ t, qLen, avgResp, lSys }]
+
+        // Programar primera llegada si existe
+        if (this.template.length > 0) {
+          this._schedule(this.template[0].arrivalTime, "ARRIVAL", { procIdx: 0 });
+        }
+      }
+
+      _schedule(time, type, payload) {
+        this.seq += 1;
+        this.fel.push({ time, seq: this.seq, type, payload });
+      }
+
+      _updateIntegrals(newTime) {
+        const dt = newTime - this.lastUpdateTime;
+        if (dt > 0) {
+          const qLen = this.getReadyCount();
+          const ioQLen = this.ioQueue.length;
+          const cpuBusy = this.cores.filter(c => c.busy).length;
+          const ioBusy = this.ioChannels.filter(ch => ch.busy).length;
+          const totalInSystem = qLen + cpuBusy + ioQLen + ioBusy;
+
+          this.areaSystemL += totalInSystem * dt;
+          this.areaReadyQ += qLen * dt;
+          this.areaIoQ += ioQLen * dt;
+          this.totalCpuBusyTime += cpuBusy * dt;
+          this.totalIoBusyTime += ioBusy * dt;
+          this.lastUpdateTime = newTime;
+        }
+      }
+
+      getReadyCount() {
+        return this.readyQueues[0].length + this.readyQueues[1].length + this.readyQueues[2].length;
+      }
+
+      getQuantumForLevel(level) {
+        if (this.policy === "FCFS") return Infinity;
+        if (this.policy === "RR") return 4.0;
+        // MLFQ: Q0 = 2.0 ms, Q1 = 6.0 ms, Q2 = FCFS (Infinity)
+        if (level === 0) return 2.0;
+        if (level === 1) return 6.0;
+        return Infinity;
+      }
+
+      _enqueueReady(proc) {
+        proc.state = "READY";
+        proc.lastReadyEnter = this.now;
+        const lvl = this.policy === "MLFQ" ? proc.queueLevel : 0;
+        this.readyQueues[lvl].push(proc);
+      }
+
+      _dequeueReady() {
+        if (this.policy === "MLFQ") {
+          for (let lvl = 0; lvl < 3; lvl++) {
+            if (this.readyQueues[lvl].length > 0) {
+              return this.readyQueues[lvl].shift();
+            }
+          }
+          return null;
+        }
+        return this.readyQueues[0].length > 0 ? this.readyQueues[0].shift() : null;
+      }
+
+      peekNextReady() {
+        if (this.policy === "MLFQ") {
+          for (let lvl = 0; lvl < 3; lvl++) {
+            if (this.readyQueues[lvl].length > 0) return this.readyQueues[lvl][0];
+          }
+          return null;
+        }
+        return this.readyQueues[0].length > 0 ? this.readyQueues[0][0] : null;
+      }
+
+      _tryDispatchCPU() {
+        for (const core of this.cores) {
+          if (!core.busy) {
+            const nextProc = this._dequeueReady();
+            if (!nextProc) break;
+
+            // Acumular espera en cola de listos
+            nextProc.cpuWaitTime += (this.now - nextProc.lastReadyEnter);
+
+            core.busy = true;
+            core.phase = "CS";
+            core.proc = nextProc;
+            core.sliceStart = this.now;
+            core.sliceEnd = this.now + CS_OVERHEAD;
+
+            nextProc.state = "CS";
+            this.contextSwitches += 1;
+
+            this._schedule(this.now + CS_OVERHEAD, "CPU_CS_DONE", { coreId: core.id });
+          }
+        }
+      }
+
+      _tryDispatchIO() {
+        for (const ch of this.ioChannels) {
+          if (!ch.busy && this.ioQueue.length > 0) {
+            const proc = this.ioQueue.shift();
+            proc.ioWaitTime += (this.now - proc.lastIoEnter);
+
+            const ioDur = proc.ioBursts[proc.burstIdx];
+            ch.busy = true;
+            ch.proc = proc;
+            ch.start = this.now;
+            ch.end = this.now + ioDur;
+
+            proc.state = "IO_RUN";
+            this._schedule(this.now + ioDur, "IO_DONE", { channelId: ch.id });
+          }
+        }
+      }
+
+      // Ejecuta exactamente UN evento discreto de la FEL
+      step() {
+        const ev = this.fel.pop();
+        if (!ev) return false;
+
+        this._updateIntegrals(ev.time);
+        this.now = ev.time;
+
+        if (ev.type === "ARRIVAL") {
+          const tpl = this.template[ev.payload.procIdx];
+          const proc = {
+            pid: tpl.pid,
+            label: tpl.label,
+            type: tpl.type,
+            arrivalTime: tpl.arrivalTime,
+            cpuBursts: tpl.cpuBursts,
+            ioBursts: tpl.ioBursts,
+            burstIdx: 0,
+            remCpu: tpl.cpuBursts[0],
+            queueLevel: 0,
+            state: "READY",
+            firstDispatchTime: null,
+            finishTime: null,
+            lastReadyEnter: this.now,
+            lastIoEnter: 0,
+            cpuWaitTime: 0,
+            csTime: 0,
+            cpuExecTime: 0,
+            ioWaitTime: 0,
+            ioExecTime: 0,
+            contextSwitches: 0
+          };
+
+          this.arrivedCount += 1;
+          this.activeProcs.set(proc.pid, proc);
+          this._enqueueReady(proc);
+
+          // Programar siguiente llegada
+          const nextIdx = ev.payload.procIdx + 1;
+          if (nextIdx < this.template.length) {
+            this._schedule(this.template[nextIdx].arrivalTime, "ARRIVAL", { procIdx: nextIdx });
+          }
+
+          this._tryDispatchCPU();
+
+          this.lastEvent = {
+            branch: "ARRIVAL",
+            title: `Llegada de ${proc.label} (${proc.type === "IO" ? "I/O-Bound" : "CPU-Bound"})`,
+            detail: `Ingresa a cola Q0 en t = ${fmtNum(this.now, 2)} ms. Ráfaga #1 = ${fmtNum(proc.remCpu, 2)} ms.`,
+            time: this.now
+          };
+
+        } else if (ev.type === "CPU_CS_DONE") {
+          const core = this.cores[ev.payload.coreId];
+          const proc = core.proc;
+          proc.csTime += CS_OVERHEAD;
+          proc.contextSwitches += 1;
+          core.busyTime += CS_OVERHEAD;
+
+          if (proc.firstDispatchTime === null) {
+            proc.firstDispatchTime = this.now;
+          }
+
+          const quantum = this.getQuantumForLevel(proc.queueLevel);
+          const execDur = Math.min(proc.remCpu, quantum);
+
+          core.phase = "RUNNING";
+          core.sliceStart = this.now;
+          core.sliceEnd = this.now + execDur;
+          proc.state = "RUNNING";
+
+          this._schedule(this.now + execDur, "CPU_BURST_END", {
+            coreId: core.id,
+            execDur
+          });
+
+          this.lastEvent = {
+            branch: "ARRIVAL",
+            title: `Despacho en Core ${core.id}: ${proc.label}`,
+            detail: `Cambio de contexto completado (0,15 ms). Ejecuta ${fmtNum(execDur, 2)} ms en Q${proc.queueLevel}.`,
+            time: this.now
+          };
+
+        } else if (ev.type === "CPU_BURST_END") {
+          const core = this.cores[ev.payload.coreId];
+          const proc = core.proc;
+          const execDur = ev.payload.execDur;
+
+          proc.remCpu -= execDur;
+          proc.cpuExecTime += execDur;
+          core.busyTime += execDur;
+
+          // Liberar núcleo
+          core.busy = false;
+          core.phase = "IDLE";
+          core.proc = null;
+
+          // Compuerta XOR de transición de estado
+          if (proc.remCpu > 1e-6) {
+            // Rama 1: Expira quantum -> Preempción
+            const prevLvl = proc.queueLevel;
+            if (this.policy === "MLFQ" && proc.queueLevel < 2) {
+              proc.queueLevel += 1;
+            }
+            this._enqueueReady(proc);
+            this._tryDispatchCPU();
+
+            this.lastEvent = {
+              branch: "PREEMPT",
+              title: `Preempción de ${proc.label} en Core ${core.id}`,
+              detail: this.policy === "MLFQ"
+                ? `Agotó quantum en Q${prevLvl} → degradado a Q${proc.queueLevel} (restan ${fmtNum(proc.remCpu, 2)} ms).`
+                : `Agotó quantum (4,0 ms) → reencolado en FIFO (restan ${fmtNum(proc.remCpu, 2)} ms).`,
+              time: this.now
+            };
+          } else if (proc.burstIdx < proc.ioBursts.length) {
+            // Rama 2: Solicitud de E/S -> Bloqueo en controlador NVMe
+            proc.state = "IO_WAIT";
+            proc.lastIoEnter = this.now;
+            this.ioQueue.push(proc);
+
+            this._tryDispatchCPU();
+            this._tryDispatchIO();
+
+            this.lastEvent = {
+              branch: "IO_REQ",
+              title: `Solicitud E/S de ${proc.label} (Core ${core.id} libre)`,
+              detail: `Ráfaga CPU #${proc.burstIdx + 1} completada. Pasa a cola NVMe/DMA (${fmtNum(proc.ioBursts[proc.burstIdx], 2)} ms).`,
+              time: this.now
+            };
+          } else {
+            // Rama 3: Terminación de PCB
+            proc.state = "TERMINATED";
+            proc.finishTime = this.now;
+            this.activeProcs.delete(proc.pid);
+            this.completedProcs.push(proc);
+
+            this._tryDispatchCPU();
+
+            const ct = proc.finishTime - proc.arrivalTime;
+            this.lastEvent = {
+              branch: "TERMINATED",
+              title: `Terminación de ${proc.label} (${proc.type === "IO" ? "I/O-Bound" : "CPU-Bound"})`,
+              detail: `PCB liberado en t = ${fmtNum(this.now, 2)} ms. Turnaround CT = ${fmtNum(ct, 2)} ms.`,
+              time: this.now
+            };
+          }
+
+        } else if (ev.type === "IO_DONE") {
+          const ch = this.ioChannels[ev.payload.channelId];
+          const proc = ch.proc;
+          const ioDur = proc.ioBursts[proc.burstIdx];
+
+          proc.ioExecTime += ioDur;
+          ch.busyTime += ioDur;
+          ch.busy = false;
+          ch.proc = null;
+
+          // Avanzar a la siguiente ráfaga de CPU
+          proc.burstIdx += 1;
+          proc.remCpu = proc.cpuBursts[proc.burstIdx];
+
+          // En MLFQ, completar E/S promueve a Q0 (alta prioridad interactiva)
+          if (this.policy === "MLFQ") {
+            proc.queueLevel = 0;
+          }
+
+          this._enqueueReady(proc);
+          this._tryDispatchIO();
+          this._tryDispatchCPU();
+
+          this.lastEvent = {
+            branch: "IO_DONE",
+            title: `Interrupción Fin E/S en Canal DMA ${ch.id}: ${proc.label}`,
+            detail: `E/S completada → retorna a cola de listos${this.policy === "MLFQ" ? " promovido a Q0" : ""}.`,
+            time: this.now
+          };
+        }
+
+        // Registrar punto en serie temporal (cada ~3 eventos o salto >= 1.5 ms)
+        if (
+          this.history.length === 0 ||
+          this.now - this.history[this.history.length - 1].t >= 2.0
+        ) {
+          this.history.push({
+            t: this.now,
+            qLen: this.getReadyCount(),
+            avgResp: this.getMeanResponse()
+          });
+          if (this.history.length > 260) {
+            this.history.shift();
+          }
+        }
+
+        return true;
+      }
+
+      // Ejecuta la simulación completa por lotes
+      runAll(maxTime = 120000) {
+        while (this.fel.size > 0) {
+          const nextEv = this.fel.peek();
+          if (nextEv.time > maxTime) break;
+          this.step();
+        }
+      }
+
+      getMeanResponse() {
+        if (this.completedProcs.length === 0) return 0;
+        let sum = 0;
+        for (const p of this.completedProcs) {
+          sum += (p.firstDispatchTime - p.arrivalTime);
+        }
+        return sum / this.completedProcs.length;
+      }
+
+      getMeanTurnaround() {
+        if (this.completedProcs.length === 0) return 0;
+        let sum = 0;
+        for (const p of this.completedProcs) {
+          sum += (p.finishTime - p.arrivalTime);
+        }
+        return sum / this.completedProcs.length;
+      }
+    }
+
+    // =========================================================================
+    // 5. UTILIDADES DE FORMATO Y ESTADÍSTICA
+    // =========================================================================
+    function fmtNum(val, decimals = 1) {
+      if (!Number.isFinite(val)) return "—";
+      return val.toFixed(decimals).replace(".", ",");
+    }
+
+    function percentile(sortedArr, p) {
+      if (sortedArr.length === 0) return 0;
+      const idx = (p / 100) * (sortedArr.length - 1);
+      const lo = Math.floor(idx);
+      const hi = Math.ceil(idx);
+      if (lo === hi) return sortedArr[lo];
+      return sortedArr[lo] + (sortedArr[hi] - sortedArr[lo]) * (idx - lo);
+    }
+
+    function mean(arr) {
+      if (arr.length === 0) return 0;
+      let s = 0;
+      for (let i = 0; i < arr.length; i++) s += arr[i];
+      return s / arr.length;
+    }
+
+    // =========================================================================
+    // 6. ESTADO GLOBAL DE LA APLICACIÓN
+    // =========================================================================
+    const appState = {
+      params: {
+        lambda: 95,
+        numCores: 2,
+        numIO: 2,
+        ioRatio: 70,
+        seed: 42
+      },
+      activeTab: "live",
+      livePolicy: "MLFQ",
+      isPlaying: false,
+      speed: 0.2,
+      lastFrameTs: null,
+
+      // Motores sincronizados (CRN) para pestañas En Vivo y Paso a Paso
+      liveWorkload: null,
+      liveEngines: {
+        FCFS: null,
+        RR: null,
+        MLFQ: null
+      },
+
+      // Resultados Batch (Pestañas 2 y 4)
+      batchWorkload: null,
+      batchMetrics: null,
+      loadCurveData: null
+    };
+
+    // =========================================================================
+    // 7. CÁLCULO BATCH DE RESULTADOS Y VALIDACIÓN (PESTAÑAS 2 Y 4)
+    // =========================================================================
+    function runBatchAnalysis() {
+      const N_TOTAL = 1800;
+      const WARMUP = 150;
+      const COOLDOWN = 150;
+
+      const wl = generateWorkload(N_TOTAL, appState.params);
+      appState.batchWorkload = wl;
+
+      const policies = ["FCFS", "RR", "MLFQ"];
+      const metrics = {};
+
+      for (const pol of policies) {
+        const engine = new KernelDES(pol, wl.processes, appState.params);
+        engine.runAll(180000);
+
+        // Filtrar procesos en estado estacionario (P151 a P1650)
+        const allDone = engine.completedProcs.slice().sort((a, b) => a.pid - b.pid);
+        const steady = allDone.filter(p => p.pid > WARMUP && p.pid <= N_TOTAL - COOLDOWN);
+        const sample = steady.length >= 100 ? steady : allDone;
+
+        const respAll = sample.map(p => p.firstDispatchTime - p.arrivalTime).sort((a, b) => a - b);
+        const ctAll = sample.map(p => p.finishTime - p.arrivalTime);
+        const waitCpuAll = sample.map(p => p.cpuWaitTime);
+        const csAll = sample.map(p => p.csTime);
+        const execCpuAll = sample.map(p => p.cpuExecTime);
+        const ioTotalAll = sample.map(p => p.ioWaitTime + p.ioExecTime);
+
+        const ioProcs = sample.filter(p => p.type === "IO");
+        const cpuProcs = sample.filter(p => p.type === "CPU");
+
+        const ctIO = mean(ioProcs.map(p => p.finishTime - p.arrivalTime));
+        const ctCPU = mean(cpuProcs.map(p => p.finishTime - p.arrivalTime));
+        const respIO = mean(ioProcs.map(p => p.firstDispatchTime - p.arrivalTime));
+        const respCPU = mean(cpuProcs.map(p => p.firstDispatchTime - p.arrivalTime));
+
+        const totalTime = Math.max(1e-6, engine.now);
+        const cpuUtil = Math.min(100, (engine.totalCpuBusyTime / (totalTime * appState.params.numCores)) * 100);
+        const ioUtil = Math.min(100, (engine.totalIoBusyTime / (totalTime * appState.params.numIO)) * 100);
+
+        // Ley de Little sobre toda la corrida
+        const lambdaEff = engine.completedProcs.length / totalTime; // proc/ms
+        const meanCtAll = mean(engine.completedProcs.map(p => p.finishTime - p.arrivalTime));
+        const littleTheoreticalL = lambdaEff * meanCtAll;
+        const littleSimulatedL = engine.areaSystemL / totalTime;
+        const littleErrorPct = littleTheoreticalL > 0
+          ? Math.abs(littleSimulatedL - littleTheoreticalL) / littleTheoreticalL * 100
+          : 0;
+
+        metrics[pol] = {
+          policy: pol,
+          evaluatedCount: sample.length,
+          completedTotal: engine.completedProcs.length,
+          unservedCount: N_TOTAL - engine.completedProcs.length,
+          meanResp: mean(respAll),
+          meanCT: mean(ctAll),
+          p50: percentile(respAll, 50),
+          p75: percentile(respAll, 75),
+          p90: percentile(respAll, 90),
+          p95: percentile(respAll, 95),
+          p99: percentile(respAll, 99),
+          p999: percentile(respAll, 99.9),
+          maxResp: respAll.length > 0 ? respAll[respAll.length - 1] : 0,
+          meanWaitCpu: mean(waitCpuAll),
+          meanCsTime: mean(csAll),
+          meanExecCpu: mean(execCpuAll),
+          meanIoTime: mean(ioTotalAll),
+          ctIO,
+          ctCPU,
+          respIO,
+          respCPU,
+          cpuUtil,
+          ioUtil,
+          contextSwitches: engine.contextSwitches,
+          lambdaEffProcSec: lambdaEff * 1000,
+          littleTheoreticalL,
+          littleSimulatedL,
+          littleErrorPct
+        };
+      }
+
+      appState.batchMetrics = metrics;
+    }
+
+    function computeLoadCurve() {
+      const lambdas = [20, 35, 50, 65, 80, 95, 110, 120, 130];
+      const curve = {
+        lambdas,
+        FCFS: [],
+        RR: [],
+        MLFQ: []
+      };
+
+      for (const lam of lambdas) {
+        const subParams = { ...appState.params, lambda: lam };
+        const wl = generateWorkload(750, subParams);
+        for (const pol of ["FCFS", "RR", "MLFQ"]) {
+          const eng = new KernelDES(pol, wl.processes, subParams);
+          eng.runAll(60000);
+          const done = eng.completedProcs.slice(80);
+          const avgR = done.length > 0
+            ? mean(done.map(p => p.firstDispatchTime - p.arrivalTime))
+            : eng.getMeanResponse();
+          curve[pol].push(avgR);
+        }
+      }
+      appState.loadCurveData = curve;
+    }
+
+    // =========================================================================
+    // 8. INICIALIZACIÓN / REINICIO COMPLETO DE SIMULACIÓN
+    // =========================================================================
+    function initAllSimulations() {
+      // 1. Generar carga larga para reproducción en vivo (2500 procesos)
+      const liveWl = generateWorkload(2500, appState.params);
+      appState.liveWorkload = liveWl;
+
+      appState.liveEngines.FCFS = new KernelDES("FCFS", liveWl.processes, appState.params);
+      appState.liveEngines.RR = new KernelDES("RR", liveWl.processes, appState.params);
+      appState.liveEngines.MLFQ = new KernelDES("MLFQ", liveWl.processes, appState.params);
+
+      // Avanzar un par de eventos iniciales para que el diagrama no arranque vacío
+      advanceAllLiveEnginesByEvents(3);
+
+      // 2. Ejecutar análisis estadístico por lotes y curva de carga
+      runBatchAnalysis();
+      computeLoadCurve();
+
+      // 3. Renderizar toda la interfaz
+      renderAll();
+    }
+
+    // Mantiene las 3 políticas en el mismo tiempo virtual t
+    function advanceAllLiveEnginesToTime(targetTime) {
+      for (const pol of ["FCFS", "RR", "MLFQ"]) {
+        const eng = appState.liveEngines[pol];
+        while (eng.fel.size > 0 && eng.fel.peek().time <= targetTime) {
+          eng.step();
+        }
+        if (eng.now < targetTime) {
+          eng._updateIntegrals(targetTime);
+          eng.now = targetTime;
+        }
+      }
+    }
+
+    function advanceAllLiveEnginesByEvents(numEvents = 1) {
+      const activeEng = appState.liveEngines[appState.livePolicy];
+      for (let i = 0; i < numEvents; i++) {
+        if (!activeEng.step()) break;
+      }
+      // Sincronizar las otras dos políticas exactamente hasta activeEng.now
+      const targetT = activeEng.now;
+      for (const pol of ["FCFS", "RR", "MLFQ"]) {
+        if (pol === appState.livePolicy) continue;
+        const eng = appState.liveEngines[pol];
+        while (eng.fel.size > 0 && eng.fel.peek().time <= targetT) {
+          eng.step();
+        }
+        if (eng.now < targetT) {
+          eng._updateIntegrals(targetT);
+          eng.now = targetT;
+        }
+      }
+    }
+
+    // =========================================================================
+    // 9. RENDERIZADO PESTAÑA 1 ("EN VIVO")
+    // =========================================================================
+    function renderLiveTab() {
+      const eng = appState.liveEngines[appState.livePolicy];
+      if (!eng) return;
+
+      // Reloj
+      document.getElementById("live-clock").textContent = fmtNum(eng.now, 1);
+
+      // Contadores de estado
+      const qCount = eng.getReadyCount();
+      const cpuBusy = eng.cores.filter(c => c.busy).length;
+      const ioQLen = eng.ioQueue.length;
+      const ioBusy = eng.ioChannels.filter(ch => ch.busy).length;
+      const totalL = qCount + cpuBusy + ioQLen + ioBusy;
+
+      document.getElementById("live-littles-counter").textContent =
+        `En el sistema: L(t) = Q + en servicio = (${qCount + ioQLen}) + (${cpuBusy + ioBusy}) = ${totalL}`;
+
+      // Bloque 1: Generador Poisson
+      document.getElementById("flow-arrived").textContent = eng.arrivedCount;
+      const nextArrEv = eng.fel.toSortedArray(12).find(e => e.type === "ARRIVAL");
+      document.getElementById("flow-next-arrival").textContent = nextArrEv
+        ? `${fmtNum(Math.max(0, nextArrEv.time - eng.now), 1)} ms`
+        : "Fin";
+
+      // Bloque 2: Colas de Listos Q(t)
+      document.getElementById("flow-q-count").textContent = qCount;
+      const badgeEl = document.getElementById("flow-q-policy-badge");
+      if (eng.policy === "FCFS") {
+        badgeEl.textContent = "FCFS";
+        badgeEl.className = "text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-blue-100 text-blue-800";
+        document.getElementById("flow-queue-formula").textContent = "FIFO sin preempción";
+        document.getElementById("flow-sched-name").textContent = "FCFS (Orden llegada)";
+        document.getElementById("flow-sched-rule").textContent = "Ejecuta ráfaga completa";
+      } else if (eng.policy === "RR") {
+        badgeEl.textContent = "RR q=4ms";
+        badgeEl.className = "text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800";
+        document.getElementById("flow-queue-formula").textContent = "Circular q = 4,0 ms";
+        document.getElementById("flow-sched-name").textContent = "Round Robin (q=4ms)";
+        document.getElementById("flow-sched-rule").textContent = "Preempción por quantum fijo";
+      } else {
+        badgeEl.textContent = "MLFQ";
+        badgeEl.className = "text-[10px] font-mono font-semibold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800";
+        document.getElementById("flow-queue-formula").textContent = "Q0(2ms) › Q1(6ms) › Q2";
+        document.getElementById("flow-sched-name").textContent = "MLFQ 3 Niveles";
+        document.getElementById("flow-sched-rule").textContent = "Degrada quantum / Promueve E/S";
+      }
+
+      const readyContainer = document.getElementById("flow-ready-pids");
+      const allQueued = [
+        ...eng.readyQueues[0].map(p => ({ p, q: 0 })),
+        ...eng.readyQueues[1].map(p => ({ p, q: 1 })),
+        ...eng.readyQueues[2].map(p => ({ p, q: 2 }))
+      ];
+
+      if (allQueued.length === 0) {
+        readyContainer.innerHTML = `<span class="text-[11px] text-slate-400 italic m-auto">Cola vacía</span>`;
+        document.getElementById("flow-next-pid").textContent = "—";
+      } else {
+        const nextP = allQueued[0].p;
+        document.getElementById("flow-next-pid").textContent = `${nextP.label} (${nextP.type})`;
+        const shown = allQueued.slice(0, 22);
+        readyContainer.innerHTML = shown.map(({ p, q }, idx) => {
+          const isIo = p.type === "IO";
+          const colorCls = isIo
+            ? "bg-blue-50 text-blue-700 border-blue-200"
+            : "bg-amber-50 text-amber-800 border-amber-200";
+          const ringCls = idx === 0 ? "ring-2 ring-slate-900/30 font-bold" : "";
+          const qTag = eng.policy === "MLFQ" ? `<span class="opacity-60 text-[9px]">·Q${q}</span>` : "";
+          return `<span class="inline-flex items-center px-1.5 py-0.5 rounded border font-mono text-[10px] ${colorCls} ${ringCls}">${p.label}${qTag}</span>`;
+        }).join("") + (allQueued.length > 22
+          ? `<span class="text-[10px] font-mono text-slate-500 px-1">+${allQueued.length - 22} más</span>`
+          : "");
+      }
+
+      // Bloque 4: Núcleos CPU
+      document.getElementById("flow-cores-busy").textContent = `${cpuBusy}/${eng.numCores}`;
+      const curCpuUtil = eng.now > 0 ? (eng.totalCpuBusyTime / (eng.now * eng.numCores)) * 100 : 0;
+      document.getElementById("flow-cpu-util").textContent = `Util: ${fmtNum(curCpuUtil, 0)}%`;
+
+      const cpuSlotsEl = document.getElementById("flow-cpu-slots");
+      cpuSlotsEl.innerHTML = eng.cores.map(c => {
+        if (!c.busy || !c.proc) {
+          return `
+            <div class="flex items-center justify-between px-2 py-1 rounded-lg bg-white/80 border border-emerald-200/70 text-[11px]">
+              <span class="font-mono font-semibold text-slate-500">Core ${c.id}</span>
+              <span class="text-slate-400 italic">Inactivo</span>
+            </div>`;
+        }
+        const isIo = c.proc.type === "IO";
+        const pill = isIo ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800";
+        const phaseTxt = c.phase === "CS" ? "CS 0.15ms" : `Q${c.proc.queueLevel} · ${fmtNum(Math.max(0, c.sliceEnd - eng.now), 1)}ms`;
+        return `
+          <div class="flex items-center justify-between px-2 py-1 rounded-lg bg-white border border-emerald-300 text-[11px] shadow-2xs">
+            <span class="font-mono font-bold text-slate-800">Core ${c.id}</span>
+            <span class="px-1.5 py-0.2 rounded font-mono font-semibold ${pill}">${c.proc.label}</span>
+            <span class="font-mono text-[10px] text-slate-500">${phaseTxt}</span>
+          </div>`;
+      }).join("");
+
+      // Bloque 5: E/S NVMe/DMA
+      document.getElementById("flow-io-count").textContent = `Q:${ioQLen} | ${ioBusy}/${eng.numIO}`;
+      const busyChs = eng.ioChannels.filter(ch => ch.busy && ch.proc);
+      document.getElementById("flow-io-active").textContent = busyChs.length > 0
+        ? busyChs.map(ch => `DMA${ch.id}: ${ch.proc.label}`).join(" · ")
+        : "Canales NVMe libres";
+
+      // Bloque 6: Salida
+      document.getElementById("flow-completed").textContent = eng.completedProcs.length;
+      document.getElementById("flow-avg-resp").textContent = `${fmtNum(eng.getMeanResponse(), 1)} ms`;
+      document.getElementById("flow-avg-ct").textContent = `${fmtNum(eng.getMeanTurnaround(), 1)} ms`;
+
+      // Pie de último evento
+      document.getElementById("live-last-event-banner").innerHTML =
+        `<span class="inline-block w-2 h-2 rounded-full bg-orange-500 mr-1.5"></span><strong>${eng.lastEvent.title}:</strong> ${eng.lastEvent.detail}`;
+
+      // Panel Inferior Izquierdo: Detalle de Hardware y Colas Multinivel
+      renderHardwarePanel(eng);
+
+      // Panel Inferior Derecho: Gráficos comparativos en paralelo (mismo tramo, mismos pedidos)
+      drawLiveComparisonCharts();
+    }
+
+    function renderHardwarePanel(eng) {
+      const badge = document.getElementById("hw-panel-policy");
+      badge.textContent = `${eng.policy} Activo`;
+
+      // Núcleos CPU con barra de progreso
+      const coresContainer = document.getElementById("hw-cores-container");
+      coresContainer.innerHTML = eng.cores.map(c => {
+        const utilPct = eng.now > 0 ? Math.min(100, (c.busyTime / eng.now) * 100) : 0;
+        let statusHtml = `<span class="text-xs text-slate-400 font-mono">IDLE</span>`;
+        let barPct = 0;
+        let barColor = "bg-slate-300";
+
+        if (c.busy && c.proc) {
+          const totalSlice = Math.max(0.01, c.sliceEnd - c.sliceStart);
+          const elapsed = Math.max(0, eng.now - c.sliceStart);
+          barPct = Math.min(100, (elapsed / totalSlice) * 100);
+          barColor = c.phase === "CS" ? "bg-indigo-500" : (c.proc.type === "IO" ? "bg-blue-600" : "bg-amber-500");
+          statusHtml = `<span class="font-mono text-xs font-bold ${c.proc.type === "IO" ? "text-blue-700" : "text-amber-700"}">${c.proc.label} (${c.phase})</span>`;
+        }
+
+        return `
+          <div class="p-2.5 rounded-lg border border-slate-200 bg-slate-50/60">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-xs font-bold text-slate-800">Core ${c.id}</span>
+              ${statusHtml}
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+              <div class="h-full ${barColor} transition-all duration-100" style="width: ${barPct}%"></div>
+            </div>
+            <div class="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+              <span>Uso acum: ${fmtNum(utilPct, 1)}%</span>
+              <span>${c.busy ? `Resta ${fmtNum(Math.max(0, c.sliceEnd - eng.now), 2)} ms` : "Listo"}</span>
+            </div>
+          </div>`;
+      }).join("");
+
+      // Niveles de cola (Q0, Q1, Q2)
+      const qContainer = document.getElementById("hw-queues-container");
+      const levels = eng.policy === "MLFQ"
+        ? [
+            { idx: 0, name: "Cola Q0 (Alta Prioridad)", rule: "RR · q = 2,0 ms", color: "bg-emerald-500" },
+            { idx: 1, name: "Cola Q1 (Media Prioridad)", rule: "RR · q = 6,0 ms", color: "bg-blue-500" },
+            { idx: 2, name: "Cola Q2 (Baja Prioridad)", rule: "FCFS (CPU-Bound)", color: "bg-amber-500" }
+          ]
+        : [
+            {
+              idx: 0,
+              name: eng.policy === "FCFS" ? "Cola Única FIFO (FCFS)" : "Cola Circular FIFO (Round Robin)",
+              rule: eng.policy === "FCFS" ? "Sin preempción" : "Quantum q = 4,0 ms",
+              color: eng.policy === "FCFS" ? "bg-blue-600" : "bg-amber-500"
+            }
+          ];
+
+      qContainer.innerHTML = levels.map(lv => {
+        const list = eng.readyQueues[lv.idx];
+        const widthPct = Math.min(100, (list.length / 18) * 100);
+        const pills = list.slice(0, 8).map(p =>
+          `<span class="px-1 rounded text-[9px] font-mono ${p.type === "IO" ? "bg-blue-100 text-blue-800" : "bg-amber-100 text-amber-800"}">${p.label}</span>`
+        ).join(" ");
+        return `
+          <div class="p-2 rounded-lg border border-slate-200/90 bg-white">
+            <div class="flex items-center justify-between text-[11px] mb-1">
+              <span class="font-semibold text-slate-800">${lv.name}</span>
+              <span class="font-mono text-[10px] text-slate-500">${lv.rule} · <strong>${list.length} proc.</strong></span>
+            </div>
+            <div class="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden mb-1">
+              <div class="h-full ${lv.color} transition-all duration-150" style="width: ${widthPct}%"></div>
+            </div>
+            <div class="flex flex-wrap gap-1 min-h-[16px]">
+              ${pills || `<span class="text-[10px] text-slate-400">Vacía</span>`}
+            </div>
+          </div>`;
+      }).join("");
+
+      // Canales NVMe / DMA
+      const ioContainer = document.getElementById("hw-io-container");
+      ioContainer.innerHTML = eng.ioChannels.map(ch => {
+        const utilPct = eng.now > 0 ? Math.min(100, (ch.busyTime / eng.now) * 100) : 0;
+        let barPct = 0;
+        if (ch.busy && ch.proc) {
+          const dur = Math.max(0.01, ch.end - ch.start);
+          barPct = Math.min(100, ((eng.now - ch.start) / dur) * 100);
+        }
+        return `
+          <div class="p-2.5 rounded-lg border border-amber-200/80 bg-amber-50/30">
+            <div class="flex items-center justify-between text-xs mb-1">
+              <span class="font-bold text-amber-950">Canal DMA ${ch.id}</span>
+              <span class="font-mono text-[11px] font-semibold ${ch.busy ? "text-amber-800" : "text-slate-400"}">
+                ${ch.busy && ch.proc ? ch.proc.label : "LIBRE"}
+              </span>
+            </div>
+            <div class="w-full h-1.5 rounded-full bg-amber-100 overflow-hidden">
+              <div class="h-full bg-amber-500 transition-all duration-100" style="width: ${barPct}%"></div>
+            </div>
+            <div class="flex justify-between text-[10px] font-mono text-slate-500 mt-1">
+              <span>Uso: ${fmtNum(utilPct, 1)}%</span>
+              <span>Cola E/S: ${eng.ioQueue.length}</span>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    // =========================================================================
+    // 10. DIBUJO EN CANVAS DE ALTA DENSIDAD (RETINA / HIDPI)
+    // =========================================================================
+    function setupHiDPICanvas(canvas) {
+      if (!canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return null;
+      const dpr = window.devicePixelRatio || 1;
+      if (canvas.width !== Math.round(rect.width * dpr) || canvas.height !== Math.round(rect.height * dpr)) {
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+      }
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      return { ctx, w: rect.width, h: rect.height };
+    }
+
+    function drawLiveComparisonCharts() {
+      const eFCFS = appState.liveEngines.FCFS;
+      const eRR = appState.liveEngines.RR;
+      const eMLFQ = appState.liveEngines.MLFQ;
+      if (!eFCFS || !eRR || !eMLFQ) return;
+
+      drawMultiLineSeries(
+        document.getElementById("canvas-live-queue"),
+        "Longitud de Cola de Listos Q(t) [procesos]",
+        [
+          { label: "FCFS", color: "#2563EB", pts: eFCFS.history.map(d => ({ x: d.t, y: d.qLen })) },
+          { label: "RR", color: "#D97706", pts: eRR.history.map(d => ({ x: d.t, y: d.qLen })) },
+          { label: "MLFQ", color: "#059669", pts: eMLFQ.history.map(d => ({ x: d.t, y: d.qLen })) }
+        ],
+        0
+      );
+
+      drawMultiLineSeries(
+        document.getElementById("canvas-live-resp"),
+        "Tiempo de Respuesta Medio Acumulado [ms]",
+        [
+          { label: "FCFS", color: "#2563EB", pts: eFCFS.history.map(d => ({ x: d.t, y: d.avgResp })) },
+          { label: "RR", color: "#D97706", pts: eRR.history.map(d => ({ x: d.t, y: d.avgResp })) },
+          { label: "MLFQ", color: "#059669", pts: eMLFQ.history.map(d => ({ x: d.t, y: d.avgResp })) }
+        ],
+        1
+      );
+    }
+
+    function drawMultiLineSeries(canvas, title, seriesList, decimals) {
+      const setup = setupHiDPICanvas(canvas);
+      if (!setup) return;
+      const { ctx, w, h } = setup;
+      ctx.clearRect(0, 0, w, h);
+
+      const padL = 42, padR = 14, padT = 24, padB = 22;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+
+      // Título superior izquierdo
+      ctx.fillStyle = "#334155";
+      ctx.font = "600 11px Inter, sans-serif";
+      ctx.fillText(title, padL, 14);
+
+      // Rango X e Y
+      let minX = Infinity, maxX = -Infinity, maxY = 5;
+      for (const s of seriesList) {
+        for (const p of s.pts) {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y > maxY) maxY = p.y;
+        }
+      }
+      if (!Number.isFinite(minX) || maxX <= minX) {
+        minX = 0;
+        maxX = 10;
+      }
+      maxY = maxY * 1.15;
+
+      // Cuadrícula horizontal
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.lineWidth = 1;
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "#64748B";
+      ctx.textAlign = "right";
+      const ticks = 4;
+      for (let i = 0; i <= ticks; i++) {
+        const val = (maxY * i) / ticks;
+        const y = padT + plotH - (plotH * i) / ticks;
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(padL + plotW, y);
+        ctx.stroke();
+        ctx.fillText(val.toFixed(decimals), padL - 6, y + 3);
+      }
+
+      // Eje X etiquetas
+      ctx.textAlign = "center";
+      ctx.fillText(`${minX.toFixed(0)} ms`, padL + 18, h - 6);
+      ctx.fillText(`${((minX + maxX) / 2).toFixed(0)} ms`, padL + plotW / 2, h - 6);
+      ctx.fillText(`${maxX.toFixed(0)} ms`, padL + plotW - 18, h - 6);
+
+      // Trazar líneas
+      for (const s of seriesList) {
+        if (s.pts.length < 2) continue;
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        s.pts.forEach((p, idx) => {
+          const x = padL + ((p.x - minX) / (maxX - minX)) * plotW;
+          const y = padT + plotH - (p.y / maxY) * plotH;
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        // Punto final con valor actual
+        const last = s.pts[s.pts.length - 1];
+        const lx = padL + ((last.x - minX) / (maxX - minX)) * plotW;
+        const ly = padT + plotH - (last.y / maxY) * plotH;
+        ctx.fillStyle = s.color;
+        ctx.beginPath();
+        ctx.arc(lx, ly, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // =========================================================================
+    // 11. RENDERIZADO PESTAÑA 2 ("RESULTADOS")
+    // =========================================================================
+    function renderResultsTab() {
+      const m = appState.batchMetrics;
+      if (!m) return;
+
+      const policies = [
+        { key: "FCFS", name: "FCFS", desc: "Orden de llegada (sin preempción).", dotColor: "bg-blue-600", textColor: "text-blue-700", borderTop: "border-t-blue-600" },
+        { key: "RR", name: "Round Robin", desc: "Cola circular con quantum q = 4,0 ms.", dotColor: "bg-amber-600", textColor: "text-amber-700", borderTop: "border-t-amber-600" },
+        { key: "MLFQ", name: "MLFQ (3 Niveles)", desc: "Q0=2ms, Q1=6ms, Q2=FCFS + promoción E/S.", dotColor: "bg-emerald-600", textColor: "text-emerald-700", borderTop: "border-t-emerald-600" }
+      ];
+
+      // Determinar ganador (mínimo valor) en cada métrica clave
+      const bestResp = Math.min(m.FCFS.meanResp, m.RR.meanResp, m.MLFQ.meanResp);
+      const bestCT = Math.min(m.FCFS.meanCT, m.RR.meanCT, m.MLFQ.meanCT);
+      const bestCtIO = Math.min(m.FCFS.ctIO, m.RR.ctIO, m.MLFQ.ctIO);
+      const bestP99 = Math.min(m.FCFS.p99, m.RR.p99, m.MLFQ.p99);
+      const bestWait = Math.min(m.FCFS.meanWaitCpu, m.RR.meanWaitCpu, m.MLFQ.meanWaitCpu);
+      const bestCS = Math.min(m.FCFS.contextSwitches, m.RR.contextSwitches, m.MLFQ.contextSwitches);
+
+      const cardsContainer = document.getElementById("results-cards-container");
+      cardsContainer.innerHTML = policies.map(pol => {
+        const d = m[pol.key];
+        const winDot = (val, best) => Math.abs(val - best) < 1e-4
+          ? `<span class="inline-block w-2 h-2 rounded-full ${pol.dotColor} ml-1.5" title="Mejor en esta métrica"></span>`
+          : "";
+
+        return `
+          <div class="bg-white rounded-xl border border-slate-200 border-t-4 ${pol.borderTop} shadow-sm p-4 sm:p-5 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full ${pol.dotColor}"></span>
+                  <h3 class="text-sm font-bold text-slate-900">${pol.name}</h3>
+                </div>
+                <span class="text-[11px] font-mono text-slate-400">${d.evaluatedCount} proc.</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">${pol.desc}</p>
+
+              <!-- Métrica principal -->
+              <div class="mt-4 mb-4 pb-3 border-b border-slate-100">
+                <div class="font-mono text-3xl font-bold text-slate-900 tabular-nums flex items-center">
+                  ${fmtNum(d.meanResp, 2)} ms ${winDot(d.meanResp, bestResp)}
+                </div>
+                <div class="text-xs text-slate-500 mt-0.5">Respuesta media (primer despacho)</div>
+              </div>
+
+              <!-- Lista de indicadores -->
+              <div class="space-y-2 text-xs">
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-600">Turnaround CT global</span>
+                  <span class="font-mono font-semibold text-slate-900 tabular-nums">${fmtNum(d.meanCT, 2)} ms${winDot(d.meanCT, bestCT)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-600">Turnaround I/O-Bound</span>
+                  <span class="font-mono font-semibold text-slate-900 tabular-nums">${fmtNum(d.ctIO, 2)} ms${winDot(d.ctIO, bestCtIO)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-600">Percentil 99 respuesta</span>
+                  <span class="font-mono font-semibold text-slate-900 tabular-nums">${fmtNum(d.p99, 2)} ms${winDot(d.p99, bestP99)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-600">Espera media en CPU</span>
+                  <span class="font-mono font-semibold text-slate-900 tabular-nums">${fmtNum(d.meanWaitCpu, 2)} ms${winDot(d.meanWaitCpu, bestWait)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-600">Utilización CPU (ρ)</span>
+                  <span class="font-mono font-semibold text-slate-900 tabular-nums">${fmtNum(d.cpuUtil, 1)}%</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-slate-600">Cambios de contexto</span>
+                  <span class="font-mono font-semibold text-slate-900 tabular-nums">${d.contextSwitches.toLocaleString("es-PE")}${winDot(d.contextSwitches, bestCS)}</span>
+                </div>
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+
+      // Dibujar los 3 gráficos inferiores
+      drawTimeBreakdownChart();
+      drawPercentilesChart();
+      drawEquityChart();
+    }
+
+    // Gráfico 1 de Resultados: ¿En qué se va el tiempo? (Barras horizontales apiladas)
+    function drawTimeBreakdownChart() {
+      const canvas = document.getElementById("canvas-res-breakdown");
+      const setup = setupHiDPICanvas(canvas);
+      if (!setup || !appState.batchMetrics) return;
+      const { ctx, w, h } = setup;
+      ctx.clearRect(0, 0, w, h);
+
+      const m = appState.batchMetrics;
+      const rows = [
+        { label: "FCFS", d: m.FCFS },
+        { label: "RR", d: m.RR },
+        { label: "MLFQ", d: m.MLFQ }
+      ];
+
+      const maxTotal = Math.max(...rows.map(r => r.d.meanWaitCpu + r.d.meanCsTime + r.d.meanExecCpu + r.d.meanIoTime), 10) * 1.15;
+      const padL = 48, padR = 52, padT = 20, padB = 28;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+      const barH = 34;
+      const gap = (plotH - barH * rows.length) / (rows.length + 1);
+
+      // Eje X
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.fillStyle = "#64748B";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "center";
+      for (let i = 0; i <= 4; i++) {
+        const val = (maxTotal * i) / 4;
+        const x = padL + (plotW * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(x, padT);
+        ctx.lineTo(x, padT + plotH);
+        ctx.stroke();
+        ctx.fillText(`${val.toFixed(0)}ms`, x, h - 8);
+      }
+
+      rows.forEach((r, idx) => {
+        const y = padT + gap + idx * (barH + gap);
+        ctx.fillStyle = "#0F172A";
+        ctx.font = "bold 11px Inter, sans-serif";
+        ctx.textAlign = "right";
+        ctx.fillText(r.label, padL - 8, y + barH / 2 + 4);
+
+        const segs = [
+          { val: r.d.meanWaitCpu, color: "#F43F5E" }, // Espera CPU
+          { val: r.d.meanCsTime, color: "#64748B" },  // Context switch
+          { val: r.d.meanExecCpu, color: "#2563EB" }, // Ejecución CPU
+          { val: r.d.meanIoTime, color: "#F59E0B" }   // E/S NVMe
+        ];
+
+        let curX = padL;
+        for (const seg of segs) {
+          const segW = (seg.val / maxTotal) * plotW;
+          ctx.fillStyle = seg.color;
+          ctx.fillRect(curX, y, Math.max(1, segW), barH);
+          curX += segW;
+        }
+
+        const totalCt = r.d.meanWaitCpu + r.d.meanCsTime + r.d.meanExecCpu + r.d.meanIoTime;
+        ctx.fillStyle = "#0F172A";
+        ctx.font = "600 10.5px 'JetBrains Mono', monospace";
+        ctx.textAlign = "left";
+        ctx.fillText(`${fmtNum(totalCt, 1)}ms`, curX + 6, y + barH / 2 + 4);
+      });
+    }
+
+    // Gráfico 2 de Resultados: Percentiles de la respuesta
+    function drawPercentilesChart() {
+      const canvas = document.getElementById("canvas-res-percentiles");
+      const setup = setupHiDPICanvas(canvas);
+      if (!setup || !appState.batchMetrics) return;
+      const { ctx, w, h } = setup;
+      ctx.clearRect(0, 0, w, h);
+
+      const m = appState.batchMetrics;
+      const labels = ["p50", "p75", "p90", "p95", "p99", "p99.9", "máx"];
+      const getSeries = d => [d.p50, d.p75, d.p90, d.p95, d.p99, d.p999, d.maxResp];
+
+      const series = [
+        { color: "#2563EB", vals: getSeries(m.FCFS) },
+        { color: "#D97706", vals: getSeries(m.RR) },
+        { color: "#059669", vals: getSeries(m.MLFQ) }
+      ];
+
+      const maxY = Math.max(...series.flatMap(s => s.vals), 10) * 1.12;
+      const padL = 44, padR = 16, padT = 16, padB = 26;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+
+      // Grid horizontal
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.fillStyle = "#64748B";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const val = (maxY * i) / 4;
+        const y = padT + plotH - (plotH * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(padL + plotW, y);
+        ctx.stroke();
+        ctx.fillText(`${val.toFixed(0)}`, padL - 6, y + 3);
+      }
+
+      // Etiquetas eje X
+      ctx.textAlign = "center";
+      labels.forEach((lbl, i) => {
+        const x = padL + (plotW * i) / (labels.length - 1);
+        ctx.fillText(lbl, x, h - 8);
+      });
+
+      // Curvas
+      for (const s of series) {
+        ctx.strokeStyle = s.color;
+        ctx.lineWidth = 2.2;
+        ctx.beginPath();
+        s.vals.forEach((v, i) => {
+          const x = padL + (plotW * i) / (labels.length - 1);
+          const y = padT + plotH - (v / maxY) * plotH;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        s.vals.forEach((v, i) => {
+          const x = padL + (plotW * i) / (labels.length - 1);
+          const y = padT + plotH - (v / maxY) * plotH;
+          ctx.fillStyle = s.color;
+          ctx.beginPath();
+          ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+    }
+
+    // Gráfico 3 de Resultados: Equidad por perfil de proceso (I/O-Bound vs CPU-Bound)
+    function drawEquityChart() {
+      const canvas = document.getElementById("canvas-res-equity");
+      const setup = setupHiDPICanvas(canvas);
+      if (!setup || !appState.batchMetrics) return;
+      const { ctx, w, h } = setup;
+      ctx.clearRect(0, 0, w, h);
+
+      const m = appState.batchMetrics;
+      const groups = [
+        {
+          label: "I/O-Bound (Interactivos)",
+          vals: [
+            { color: "#2563EB", v: m.FCFS.ctIO },
+            { color: "#D97706", v: m.RR.ctIO },
+            { color: "#059669", v: m.MLFQ.ctIO }
+          ]
+        },
+        {
+          label: "CPU-Bound (Intensivos)",
+          vals: [
+            { color: "#2563EB", v: m.FCFS.ctCPU },
+            { color: "#D97706", v: m.RR.ctCPU },
+            { color: "#059669", v: m.MLFQ.ctCPU }
+          ]
+        }
+      ];
+
+      const maxY = Math.max(...groups.flatMap(g => g.vals.map(x => x.v)), 20) * 1.18;
+      const padL = 44, padR = 16, padT = 18, padB = 28;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+
+      // Grid horizontal
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.fillStyle = "#64748B";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const val = (maxY * i) / 4;
+        const y = padT + plotH - (plotH * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(padL + plotW, y);
+        ctx.stroke();
+        ctx.fillText(`${val.toFixed(0)}`, padL - 6, y + 3);
+      }
+
+      const groupW = plotW / groups.length;
+      const barW = Math.min(32, (groupW - 36) / 3);
+
+      groups.forEach((g, gIdx) => {
+        const centerX = padL + groupW * (gIdx + 0.5);
+        ctx.fillStyle = "#334155";
+        ctx.font = "600 11px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(g.label, centerX, h - 8);
+
+        const totalBarsW = barW * 3 + 8;
+        const startX = centerX - totalBarsW / 2;
+
+        g.vals.forEach((item, bIdx) => {
+          const bx = startX + bIdx * (barW + 4);
+          const bh = (item.v / maxY) * plotH;
+          const by = padT + plotH - bh;
+
+          ctx.fillStyle = item.color;
+          ctx.beginPath();
+          ctx.roundRect(bx, by, barW, bh, [4, 4, 0, 0]);
+          ctx.fill();
+
+          ctx.fillStyle = "#0F172A";
+          ctx.font = "600 9.5px 'JetBrains Mono', monospace";
+          ctx.fillText(`${item.v.toFixed(0)}`, bx + barW / 2, by - 4);
+        });
+      });
+    }
+
+    // =========================================================================
+    // 12. RENDERIZADO PESTAÑA 3 ("PASO A PASO - EVENTOS")
+    // =========================================================================
+    function renderStepTab() {
+      const eng = appState.liveEngines[appState.livePolicy];
+      if (!eng) return;
+
+      // Reloj grande
+      document.getElementById("step-big-clock").textContent = `t = ${fmtNum(eng.now, 2)} ms`;
+
+      // Resaltar rama activa en el diagrama SVG
+      const branch = eng.lastEvent.branch;
+      const branchMap = {
+        ARRIVAL: { group: "ev-group-arrival", line: "ev-line-arrival" },
+        PREEMPT: { group: "ev-group-preempt", line: "ev-line-preempt" },
+        IO_REQ: { group: "ev-group-io", line: "ev-line-io" },
+        IO_DONE: { group: "ev-group-io", line: "ev-line-io" },
+        TERMINATED: { group: "ev-group-term", line: "ev-line-term" }
+      };
+
+      // Resetear estilos SVG
+      ["ev-group-arrival", "ev-group-preempt", "ev-group-io", "ev-group-term"].forEach(gid => {
+        const g = document.getElementById(gid);
+        g.querySelectorAll(".ev-card").forEach(r => {
+          r.setAttribute("fill", "#F8FAFC");
+          r.setAttribute("stroke", "#CBD5E1");
+          r.setAttribute("stroke-width", "1.5");
+        });
+      });
+      ["ev-line-arrival", "ev-line-preempt", "ev-line-io", "ev-line-term"].forEach(lid => {
+        const l = document.getElementById(lid);
+        l.setAttribute("stroke", "#94A3B8");
+        l.setAttribute("stroke-width", "1.8");
+        l.setAttribute("marker-end", "url(#arrow-gray)");
+      });
+
+      const activeSpec = branchMap[branch];
+      if (activeSpec) {
+        const g = document.getElementById(activeSpec.group);
+        g.querySelectorAll(".ev-card").forEach(r => {
+          r.setAttribute("fill", "#FFF7ED");
+          r.setAttribute("stroke", "#EA580C");
+          r.setAttribute("stroke-width", "2.2");
+        });
+        const l = document.getElementById(activeSpec.line);
+        l.setAttribute("stroke", "#EA580C");
+        l.setAttribute("stroke-width", "2.4");
+        l.setAttribute("marker-end", "url(#arrow-active)");
+      }
+
+      document.getElementById("svg-last-event-line1").textContent =
+        `t = ${fmtNum(eng.lastEvent.time, 2)} ms · ${eng.lastEvent.title}`;
+      document.getElementById("svg-last-event-line2").textContent = eng.lastEvent.detail;
+      document.getElementById("step-narrative-box").innerHTML =
+        `<strong>Último evento (${eng.policy}):</strong> ${eng.lastEvent.title} — ${eng.lastEvent.detail}`;
+
+      // Lista de Eventos Futuros (FEL)
+      const upcoming = eng.fel.toSortedArray(6);
+      document.getElementById("step-fel-size").textContent = `${eng.fel.size} eventos en FEL`;
+      const felTbody = document.getElementById("step-fel-tbody");
+
+      const eventNames = {
+        ARRIVAL: "Llegada proceso",
+        CPU_CS_DONE: "Fin Cambio Contexto",
+        CPU_BURST_END: "Fin Quantum / Ráfaga",
+        IO_DONE: "Fin E/S NVMe (DMA)"
+      };
+
+      felTbody.innerHTML = upcoming.map((ev, idx) => {
+        let targetStr = "—";
+        if (ev.type === "ARRIVAL") {
+          targetStr = `P${ev.payload.procIdx + 1}`;
+        } else if (ev.type === "CPU_CS_DONE" || ev.type === "CPU_BURST_END") {
+          const c = eng.cores[ev.payload.coreId];
+          targetStr = `Core ${c.id} (${c.proc ? c.proc.label : "—"})`;
+        } else if (ev.type === "IO_DONE") {
+          const ch = eng.ioChannels[ev.payload.channelId];
+          targetStr = `DMA ${ch.id} (${ch.proc ? ch.proc.label : "—"})`;
+        }
+
+        const delta = Math.max(0, ev.time - eng.now);
+        return `
+          <tr class="${idx === 0 ? "bg-amber-50/70 font-bold text-slate-900" : "text-slate-600"}">
+            <td class="py-1.5 px-2.5">${idx === 0 ? "▸ " : ""}${eventNames[ev.type] || ev.type}</td>
+            <td class="py-1.5 px-2.5">${targetStr}</td>
+            <td class="py-1.5 px-2.5 text-right">${fmtNum(ev.time, 2)} ms</td>
+            <td class="py-1.5 px-2.5 text-right text-slate-500">${fmtNum(delta, 2)} ms</td>
+          </tr>`;
+      }).join("");
+
+      // Variables de estado
+      document.getElementById("step-var-cpu").textContent = eng.cores
+        .map(c => `Core ${c.id}: ${c.busy && c.proc ? `${c.proc.label} [${c.phase}]` : "Libre"}`)
+        .join(" | ");
+
+      if (eng.policy === "MLFQ") {
+        document.getElementById("step-var-queues").textContent =
+          `Q0(${eng.readyQueues[0].length}) · Q1(${eng.readyQueues[1].length}) · Q2(${eng.readyQueues[2].length})`;
+      } else {
+        document.getElementById("step-var-queues").textContent =
+          `Cola FIFO (${eng.readyQueues[0].length}): ${eng.readyQueues[0].slice(0, 5).map(p => p.label).join(", ") || "vacía"}`;
+      }
+
+      document.getElementById("step-var-io").textContent =
+        eng.ioChannels.map(ch => `DMA${ch.id}: ${ch.busy && ch.proc ? ch.proc.label : "Libre"}`).join(" | ") +
+        ` · Cola E/S: ${eng.ioQueue.length}`;
+
+      document.getElementById("step-var-qcount").textContent = `${eng.getReadyCount()} procesos`;
+
+      // Contadores estadísticos acumulados
+      document.getElementById("step-cnt-arrived").textContent = eng.arrivedCount;
+      document.getElementById("step-cnt-completed").textContent = eng.completedProcs.length;
+      document.getElementById("step-cnt-resp").textContent = `${fmtNum(eng.getMeanResponse(), 2)} ms`;
+      document.getElementById("step-cnt-ct").textContent = `${fmtNum(eng.getMeanTurnaround(), 2)} ms`;
+      const cpuUtilNow = eng.now > 0 ? (eng.totalCpuBusyTime / (eng.now * eng.numCores)) * 100 : 0;
+      document.getElementById("step-cnt-cpu-util").textContent = `${fmtNum(cpuUtilNow, 1)}%`;
+      document.getElementById("step-cnt-cs").textContent = eng.contextSwitches;
+    }
+
+    // =========================================================================
+    // 13. RENDERIZADO PESTAÑA 4 ("VALIDACIÓN")
+    // =========================================================================
+    function renderValidationTab() {
+      const m = appState.batchMetrics;
+      if (!m) return;
+
+      document.getElementById("val-current-lambda-label").textContent = `${appState.params.lambda} /s`;
+      document.getElementById("val-samples-badge").textContent = `n = ${appState.batchWorkload.processes.length.toLocaleString("es-PE")} procesos`;
+
+      // Cálculo teórico de demanda media por proceso
+      const pIO = appState.params.ioRatio / 100.0;
+      const pCPU = 1.0 - pIO;
+      // I/O-Bound: ~5.5 ráfagas * 1.67 ms + CS; CPU-Bound: ~2.5 ráfagas * 16 ms + CS
+      const meanCpuDemand = pIO * (5.5 * 1.67 + 5.5 * CS_OVERHEAD) + pCPU * (2.5 * 16.0 + 4.5 * CS_OVERHEAD);
+      const meanIoDemand = pIO * (4.5 * 3.2) + pCPU * (1.5 * 2.8);
+      const lambdaMs = appState.params.lambda / 1000.0;
+
+      const rhoCpuTheo = Math.min(100, ((lambdaMs * meanCpuDemand) / appState.params.numCores) * 100);
+      const rhoIoTheo = Math.min(100, ((lambdaMs * meanIoDemand) / appState.params.numIO) * 100);
+
+      const tbody = document.getElementById("val-table-tbody");
+      const rows = [
+        {
+          name: "Ley de Little (FCFS): L = λ · CT",
+          theo: `${fmtNum(m.FCFS.littleTheoreticalL, 2)} proc.`,
+          sim: `${fmtNum(m.FCFS.littleSimulatedL, 2)} proc.`,
+          status: m.FCFS.unservedCount > 50
+            ? `<span class="text-rose-600 font-bold">Inestable (ρ→1)</span>`
+            : `<span class="text-emerald-700 font-semibold">Err ${fmtNum(m.FCFS.littleErrorPct, 2)}% ✓</span>`
+        },
+        {
+          name: "Ley de Little (RR): L = λ · CT",
+          theo: `${fmtNum(m.RR.littleTheoreticalL, 2)} proc.`,
+          sim: `${fmtNum(m.RR.littleSimulatedL, 2)} proc.`,
+          status: m.RR.unservedCount > 50
+            ? `<span class="text-rose-600 font-bold">Inestable (ρ→1)</span>`
+            : `<span class="text-emerald-700 font-semibold">Err ${fmtNum(m.RR.littleErrorPct, 2)}% ✓</span>`
+        },
+        {
+          name: "Ley de Little (MLFQ): L = λ · CT",
+          theo: `${fmtNum(m.MLFQ.littleTheoreticalL, 2)} proc.`,
+          sim: `${fmtNum(m.MLFQ.littleSimulatedL, 2)} proc.`,
+          status: m.MLFQ.unservedCount > 50
+            ? `<span class="text-rose-600 font-bold">Inestable (ρ→1)</span>`
+            : `<span class="text-emerald-700 font-semibold">Err ${fmtNum(m.MLFQ.littleErrorPct, 2)}% ✓</span>`
+        },
+        {
+          name: `Utilización CPU ρ_CPU (${appState.params.numCores} Cores)`,
+          theo: `${fmtNum(rhoCpuTheo, 1)}%`,
+          sim: `${fmtNum(m.MLFQ.cpuUtil, 1)}%`,
+          status: m.MLFQ.cpuUtil > 96
+            ? `<span class="text-rose-600 font-bold">Saturación CPU</span>`
+            : `<span class="text-slate-700">Operativo ✓</span>`
+        },
+        {
+          name: `Utilización E/S ρ_IO (${appState.params.numIO} Canales)`,
+          theo: `${fmtNum(rhoIoTheo, 1)}%`,
+          sim: `${fmtNum(m.MLFQ.ioUtil, 1)}%`,
+          status: m.MLFQ.ioUtil > 95
+            ? `<span class="text-rose-600 font-bold">Cuello Botella E/S</span>`
+            : `<span class="text-emerald-700">Holgado ✓</span>`
+        },
+        {
+          name: "Cycle Time CT (MLFQ vs FCFS)",
+          theo: `${fmtNum(m.FCFS.meanCT, 1)} ms`,
+          sim: `${fmtNum(m.MLFQ.meanCT, 1)} ms`,
+          status: `<span class="text-emerald-700 font-semibold">-${fmtNum(((m.FCFS.meanCT - m.MLFQ.meanCT) / Math.max(1, m.FCFS.meanCT)) * 100, 1)}% CT</span>`
+        }
+      ];
+
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td class="py-2 px-3 font-sans font-medium text-slate-800">${r.name}</td>
+          <td class="py-2 px-2.5 text-right text-slate-600">${r.theo}</td>
+          <td class="py-2 px-2.5 text-right font-bold text-slate-900">${r.sim}</td>
+          <td class="py-2 px-2.5 text-right">${r.status}</td>
+        </tr>`).join("");
+
+      drawLoadCurveChart();
+      drawRandomVariableHistograms();
+    }
+
+    function drawLoadCurveChart() {
+      const canvas = document.getElementById("canvas-val-loadcurve");
+      const setup = setupHiDPICanvas(canvas);
+      if (!setup || !appState.loadCurveData) return;
+      const { ctx, w, h } = setup;
+      ctx.clearRect(0, 0, w, h);
+
+      const lc = appState.loadCurveData;
+      const lambdas = lc.lambdas;
+      const maxY = Math.max(...lc.FCFS, ...lc.RR, ...lc.MLFQ, 20) * 1.12;
+
+      const padL = 46, padR = 18, padT = 16, padB = 28;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+      const minL = lambdas[0], maxL = lambdas[lambdas.length - 1];
+
+      // Grid horizontal
+      ctx.strokeStyle = "#E2E8F0";
+      ctx.fillStyle = "#64748B";
+      ctx.font = "10px 'JetBrains Mono', monospace";
+      ctx.textAlign = "right";
+      for (let i = 0; i <= 4; i++) {
+        const val = (maxY * i) / 4;
+        const y = padT + plotH - (plotH * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(padL + plotW, y);
+        ctx.stroke();
+        ctx.fillText(`${val.toFixed(0)}ms`, padL - 6, y + 3);
+      }
+
+      // Eje X
+      ctx.textAlign = "center";
+      [20, 50, 80, 110, 130].forEach(lVal => {
+        const x = padL + ((lVal - minL) / (maxL - minL)) * plotW;
+        ctx.fillText(`${lVal}/s`, x, h - 8);
+      });
+
+      // Línea vertical de lambda actual
+      const curX = padL + ((appState.params.lambda - minL) / (maxL - minL)) * plotW;
+      ctx.save();
+      ctx.strokeStyle = "#94A3B8";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(curX, padT);
+      ctx.lineTo(curX, padT + plotH);
+      ctx.stroke();
+      ctx.restore();
+
+      const curves = [
+        { color: "#2563EB", vals: lc.FCFS },
+        { color: "#D97706", vals: lc.RR },
+        { color: "#059669", vals: lc.MLFQ }
+      ];
+
+      for (const c of curves) {
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 2.3;
+        ctx.beginPath();
+        c.vals.forEach((v, i) => {
+          const x = padL + ((lambdas[i] - minL) / (maxL - minL)) * plotW;
+          const y = padT + plotH - (v / maxY) * plotH;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+
+        c.vals.forEach((v, i) => {
+          const x = padL + ((lambdas[i] - minL) / (maxL - minL)) * plotW;
+          const y = padT + plotH - (v / maxY) * plotH;
+          ctx.fillStyle = c.color;
+          ctx.beginPath();
+          ctx.arc(x, y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+    }
+
+    // 4 Histogramas de Variables Aleatorias: Generado (barras) vs Teórico (línea o puntos)
+    function drawRandomVariableHistograms() {
+      const wl = appState.batchWorkload;
+      if (!wl) return;
+
+      const meanIA = 1000.0 / appState.params.lambda;
+      document.getElementById("hist-sub-1").textContent = `Exponencial(λ = ${appState.params.lambda}/s · μ=${fmtNum(meanIA, 1)}ms)`;
+      drawContinuousHistogram(
+        document.getElementById("canvas-hist-1"),
+        wl.samples.interArrivals,
+        0,
+        meanIA * 4.2,
+        12,
+        x => (1 / meanIA) * Math.exp(-x / meanIA),
+        "#2563EB"
+      );
+
+      document.getElementById("hist-sub-2").textContent = `Exponencial(μ = 1,6 ms)`;
+      drawContinuousHistogram(
+        document.getElementById("canvas-hist-2"),
+        wl.samples.ioCpuBursts,
+        0,
+        7.0,
+        12,
+        x => (1 / 1.6) * Math.exp(-x / 1.6),
+        "#059669"
+      );
+
+      document.getElementById("hist-sub-3").textContent = `Normal(μ = 3,2 ms; σ = 0,7)`;
+      drawContinuousHistogram(
+        document.getElementById("canvas-hist-3"),
+        wl.samples.ioDurations,
+        1.0,
+        5.4,
+        12,
+        x => (1 / (0.7 * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * Math.pow((x - 3.2) / 0.7, 2)),
+        "#D97706"
+      );
+
+      const pIO = appState.params.ioRatio / 100.0;
+      document.getElementById("hist-sub-4").textContent = `Bernoulli: P(I/O) = ${fmtNum(pIO, 2)}`;
+      drawBernoulliHistogram(
+        document.getElementById("canvas-hist-4"),
+        wl.processes,
+        pIO
+      );
+    }
+
+    function drawContinuousHistogram(canvas, samples, minVal, maxVal, numBins, pdfFn, barColor) {
+      const setup = setupHiDPICanvas(canvas);
+      if (!setup) return;
+      const { ctx, w, h } = setup;
+      ctx.clearRect(0, 0, w, h);
+
+      const binW = (maxVal - minVal) / numBins;
+      const counts = new Array(numBins).fill(0);
+      let validN = 0;
+
+      for (const s of samples) {
+        if (s >= minVal && s < maxVal) {
+          const b = Math.min(numBins - 1, Math.floor((s - minVal) / binW));
+          counts[b] += 1;
+          validN += 1;
+        }
+      }
+
+      // Convertir conteos a densidad empírica: count / (validN * binW)
+      const densities = counts.map(c => (validN > 0 ? c / (validN * binW) : 0));
+      const theoPts = [];
+      let maxDens = Math.max(...densities, 0.01);
+
+      for (let i = 0; i <= 40; i++) {
+        const x = minVal + ((maxVal - minVal) * i) / 40;
+        const y = pdfFn(x);
+        theoPts.push({ x, y });
+        if (y > maxDens) maxDens = y;
+      }
+      maxDens *= 1.15;
+
+      const padL = 10, padR = 10, padT = 12, padB = 20;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+      const stepW = plotW / numBins;
+
+      // Barras empíricas
+      ctx.fillStyle = barColor + "33";
+      ctx.strokeStyle = barColor;
+      ctx.lineWidth = 1;
+      for (let i = 0; i < numBins; i++) {
+        const bh = (densities[i] / maxDens) * plotH;
+        const bx = padL + i * stepW + 1;
+        const by = padT + plotH - bh;
+        ctx.fillRect(bx, by, Math.max(2, stepW - 2), bh);
+        ctx.strokeRect(bx, by, Math.max(2, stepW - 2), bh);
+      }
+
+      // Línea teórica PDF
+      ctx.strokeStyle = "#0F172A";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      theoPts.forEach((pt, idx) => {
+        const x = padL + ((pt.x - minVal) / (maxVal - minVal)) * plotW;
+        const y = padT + plotH - (pt.y / maxDens) * plotH;
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Etiquetas eje X
+      ctx.fillStyle = "#64748B";
+      ctx.font = "9.5px 'JetBrains Mono', monospace";
+      ctx.textAlign = "left";
+      ctx.fillText(minVal.toFixed(1), padL, h - 5);
+      ctx.textAlign = "right";
+      ctx.fillText(`${maxVal.toFixed(1)} ms`, w - padR, h - 5);
+    }
+
+    function drawBernoulliHistogram(canvas, processes, pIO) {
+      const setup = setupHiDPICanvas(canvas);
+      if (!setup) return;
+      const { ctx, w, h } = setup;
+      ctx.clearRect(0, 0, w, h);
+
+      const n = Math.max(1, processes.length);
+      const ioObs = processes.filter(p => p.type === "IO").length / n;
+      const cpuObs = 1 - ioObs;
+
+      const cats = [
+        { label: `I/O (${(ioObs * 100).toFixed(0)}%)`, obs: ioObs, theo: pIO, color: "#2563EB" },
+        { label: `CPU (${(cpuObs * 100).toFixed(0)}%)`, obs: cpuObs, theo: 1 - pIO, color: "#D97706" }
+      ];
+
+      const padL = 24, padR = 24, padT = 14, padB = 22;
+      const plotW = w - padL - padR;
+      const plotH = h - padT - padB;
+      const slotW = plotW / 2;
+      const barW = Math.min(54, slotW - 24);
+
+      cats.forEach((c, idx) => {
+        const cx = padL + slotW * (idx + 0.5);
+        const bh = c.obs * plotH;
+        const by = padT + plotH - bh;
+
+        ctx.fillStyle = c.color + "33";
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(cx - barW / 2, by, barW, bh);
+        ctx.strokeRect(cx - barW / 2, by, barW, bh);
+
+        // Punto teórico
+        const ty = padT + plotH - c.theo * plotH;
+        ctx.fillStyle = "#0F172A";
+        ctx.beginPath();
+        ctx.arc(cx, ty, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#334155";
+        ctx.font = "600 10px Inter, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(c.label, cx, h - 6);
+      });
+    }
+
+    // =========================================================================
+    // 14. RENDERIZADO GLOBAL Y BUCLE DE ANIMACIÓN (REQUESTANIMATIONFRAME)
+    // =========================================================================
+    function renderAll() {
+      if (appState.activeTab === "live") {
+        renderLiveTab();
+      } else if (appState.activeTab === "results") {
+        renderResultsTab();
+      } else if (appState.activeTab === "step") {
+        renderStepTab();
+      } else if (appState.activeTab === "validation") {
+        renderValidationTab();
+      }
+    }
+
+    function animationLoop(timestamp) {
+      if (appState.isPlaying) {
+        if (appState.lastFrameTs !== null) {
+          const dtRealMs = Math.min(60, timestamp - appState.lastFrameTs);
+          // Escala: a velocidad ×1 avanzan ~25 ms simulados por segundo real
+          const dtSimMs = (dtRealMs / 1000.0) * 35.0 * appState.speed;
+          const activeEng = appState.liveEngines[appState.livePolicy];
+          if (activeEng && activeEng.fel.size > 0) {
+            advanceAllLiveEnginesToTime(activeEng.now + dtSimMs);
+            if (appState.activeTab === "live") renderLiveTab();
+            else if (appState.activeTab === "step") renderStepTab();
+          } else {
+            togglePlay(false);
+          }
+        }
+        appState.lastFrameTs = timestamp;
+      } else {
+        appState.lastFrameTs = null;
+      }
+      requestAnimationFrame(animationLoop);
+    }
+
+    function togglePlay(forceState = null) {
+      appState.isPlaying = forceState !== null ? forceState : !appState.isPlaying;
+      const icon = document.getElementById("play-icon");
+      const label = document.getElementById("play-label");
+      if (appState.isPlaying) {
+        icon.textContent = "⏸";
+        label.textContent = "Pausar";
+      } else {
+        icon.textContent = "▶";
+        label.textContent = "Reproducir";
+      }
+    }
+
+    function setActivePolicy(policy) {
+      appState.livePolicy = policy;
+
+      // Actualizar botones en Tab 1
+      document.querySelectorAll(".policy-pill").forEach(btn => {
+        const isAct = btn.dataset.policy === policy;
+        btn.className = isAct
+          ? "policy-pill active px-3 py-1.5 text-xs font-semibold rounded-md bg-white text-slate-900 shadow-sm transition"
+          : "policy-pill px-3 py-1.5 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-900 transition";
+      });
+
+      // Actualizar botones en Tab 3
+      document.querySelectorAll(".step-policy-pill").forEach(btn => {
+        const isAct = btn.dataset.policy === policy;
+        btn.className = isAct
+          ? "step-policy-pill active px-3 py-1 text-xs font-semibold rounded-md bg-white text-slate-900 shadow-sm transition"
+          : "step-policy-pill px-3 py-1 text-xs font-semibold rounded-md text-slate-600 transition";
+      });
+
+      renderAll();
+    }
+
+    function syncControlsFromState() {
+      const p = appState.params;
+      document.getElementById("param-lambda").value = p.lambda;
+      document.getElementById("label-lambda").textContent = `${p.lambda} /s`;
+      document.getElementById("label-interarrival").textContent = `Media: ${fmtNum(1000 / p.lambda, 1)} ms`;
+
+      document.getElementById("param-cores").value = String(p.numCores);
+      document.getElementById("param-io").value = String(p.numIO);
+
+      document.getElementById("param-ioratio").value = p.ioRatio;
+      document.getElementById("label-ioratio").textContent = `${p.ioRatio}% / ${100 - p.ioRatio}%`;
+
+      document.getElementById("param-seed").value = p.seed;
+    }
+
+    // =========================================================================
+    // 15. EVENT LISTENERS Y ARRANQUE EN WINDOW.ONLOAD
+    // =========================================================================
+    window.onload = function () {
+      // Sliders e inputs de barra superior
+      const sliderLambda = document.getElementById("param-lambda");
+      sliderLambda.addEventListener("input", () => {
+        const val = parseInt(sliderLambda.value, 10);
+        appState.params.lambda = val;
+        document.getElementById("label-lambda").textContent = `${val} /s`;
+        document.getElementById("label-interarrival").textContent = `Media: ${fmtNum(1000 / val, 1)} ms`;
+      });
+      sliderLambda.addEventListener("change", () => initAllSimulations());
+
+      document.getElementById("param-cores").addEventListener("change", e => {
+        appState.params.numCores = parseInt(e.target.value, 10);
+        initAllSimulations();
+      });
+
+      document.getElementById("param-io").addEventListener("change", e => {
+        appState.params.numIO = parseInt(e.target.value, 10);
+        initAllSimulations();
+      });
+
+      const sliderIoRatio = document.getElementById("param-ioratio");
+      sliderIoRatio.addEventListener("input", () => {
+        const val = parseInt(sliderIoRatio.value, 10);
+        appState.params.ioRatio = val;
+        document.getElementById("label-ioratio").textContent = `${val}% / ${100 - val}%`;
+      });
+      sliderIoRatio.addEventListener("change", () => initAllSimulations());
+
+      document.getElementById("param-seed").addEventListener("change", e => {
+        const val = Math.max(1, parseInt(e.target.value, 10) || 42);
+        appState.params.seed = val;
+        initAllSimulations();
+      });
+
+      // Botón Simular
+      document.getElementById("btn-simulate").addEventListener("click", () => {
+        appState.params.lambda = parseInt(document.getElementById("param-lambda").value, 10);
+        appState.params.numCores = parseInt(document.getElementById("param-cores").value, 10);
+        appState.params.numIO = parseInt(document.getElementById("param-io").value, 10);
+        appState.params.ioRatio = parseInt(document.getElementById("param-ioratio").value, 10);
+        appState.params.seed = Math.max(1, parseInt(document.getElementById("param-seed").value, 10) || 42);
+        initAllSimulations();
+      });
+
+      // Escenarios rápidos (Baja, Media, Alta, Sobrecarga)
+      const presets = {
+        baja: { lambda: 35, numCores: 2, numIO: 2, ioRatio: 70 },
+        media: { lambda: 65, numCores: 2, numIO: 2, ioRatio: 70 },
+        alta: { lambda: 95, numCores: 2, numIO: 2, ioRatio: 70 },
+        sobrecarga: { lambda: 115, numCores: 2, numIO: 1, ioRatio: 75 }
+      };
+
+      document.querySelectorAll(".preset-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const p = presets[btn.dataset.preset];
+          if (!p) return;
+          Object.assign(appState.params, p);
+          syncControlsFromState();
+          initAllSimulations();
+        });
+      });
+
+      // Navegación por pestañas
+      document.querySelectorAll(".tab-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const tab = btn.dataset.tab;
+          appState.activeTab = tab;
+
+          document.querySelectorAll(".tab-btn").forEach(b => {
+            const active = b.dataset.tab === tab;
+            b.className = active
+              ? "tab-btn active px-4 py-2.5 text-xs sm:text-sm font-semibold border-b-2 border-slate-900 text-slate-900 whitespace-nowrap transition"
+              : "tab-btn px-4 py-2.5 text-xs sm:text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap transition";
+          });
+
+          document.querySelectorAll(".tab-panel").forEach(panel => {
+            panel.classList.toggle("hidden", panel.id !== `tab-${tab}`);
+          });
+
+          renderAll();
+        });
+      });
+
+      // Controles de pestaña 1 (En vivo)
+      document.querySelectorAll(".policy-pill, .step-policy-pill").forEach(btn => {
+        btn.addEventListener("click", () => setActivePolicy(btn.dataset.policy));
+      });
+
+      document.getElementById("btn-play-pause").addEventListener("click", () => togglePlay());
+
+      document.getElementById("btn-step-live").addEventListener("click", () => {
+        togglePlay(false);
+        advanceAllLiveEnginesByEvents(1);
+        renderLiveTab();
+      });
+
+      document.getElementById("btn-reset-live").addEventListener("click", () => {
+        togglePlay(false);
+        for (const pol of ["FCFS", "RR", "MLFQ"]) {
+          appState.liveEngines[pol].reset();
+        }
+        advanceAllLiveEnginesByEvents(1);
+        renderLiveTab();
+      });
+
+      document.getElementById("live-speed").addEventListener("change", e => {
+        appState.speed = parseFloat(e.target.value);
+      });
+
+      // Controles de pestaña 3 (Paso a paso)
+      document.getElementById("btn-step-advance").addEventListener("click", () => {
+        togglePlay(false);
+        advanceAllLiveEnginesByEvents(1);
+        renderStepTab();
+      });
+
+      document.getElementById("btn-step-10").addEventListener("click", () => {
+        togglePlay(false);
+        advanceAllLiveEnginesByEvents(10);
+        renderStepTab();
+      });
+
+      document.getElementById("btn-step-reset").addEventListener("click", () => {
+        togglePlay(false);
+        for (const pol of ["FCFS", "RR", "MLFQ"]) {
+          appState.liveEngines[pol].reset();
+        }
+        advanceAllLiveEnginesByEvents(1);
+        renderStepTab();
+      });
+
+      // Botón recalcular curva en pestaña 4
+      document.getElementById("btn-recalc-curve").addEventListener("click", () => {
+        computeLoadCurve();
+        renderValidationTab();
+      });
+
+      // Redibujar gráficos responsivos al redimensionar pantalla
+      window.addEventListener("resize", () => {
+        renderAll();
+      });
+
+      // Arrancar simulación inicial y loop
+      syncControlsFromState();
+      initAllSimulations();
+      requestAnimationFrame(animationLoop);
+    };
+  </script>
+</body>
+</html>
